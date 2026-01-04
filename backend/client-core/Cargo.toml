@@ -1,0 +1,22 @@
+[package]
+name = "client-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+sysinfo = { workspace = true }
+netstat2 = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+log = { workspace = true }
+backoff = { workspace = true }
+const_format = { workspace = true }
+
+models = { workspace = true }
+
+[[test]]
+name = "integration_tests"
+path = "integration_tests/mod.rs"

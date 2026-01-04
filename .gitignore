@@ -1,0 +1,49 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# macOS
+.DS_Store
+
+# .NET build artifacts
+obj/
+bin/
+frontend/**/obj/
+frontend/**/bin/
+
+# Blazor WebAssembly build output
+**/wwwroot/_framework/
+**/wwwroot/**/*.gz
+**/wwwroot/**/*.br
+**/wwwroot/**/*.wasm
+**/wwwroot/**/blazor.*.js
+**/wwwroot/**/dotnet.*.js
+**/wwwroot/**/dotnet.*.wasm
+**/wwwroot/**/*.dat
+**/wwwroot/*.styles.css
+
+# Third-party libraries (should be restored via package manager)
+**/wwwroot/lib/
+**/wwwroot/_content/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+
+# Logs
+*.log
+logs/
+
+# Node modules (for any JS tooling in submodules)
+node_modules/
+
+# Test coverage
+coverage/
+*.profraw
+*.profdata
