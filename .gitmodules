@@ -1,7 +1,6 @@
 [submodule "submodules/opencode"]
 	path = submodules/opencode
 	url = https://github.com/TonyMarkham/opencode.git
-	branch = dev
 [submodule "submodules/opencode-egui"]
 	path = submodules/opencode-egui
 	url = https://github.com/TonyMarkham/opencode-egui.git
