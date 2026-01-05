@@ -1,13 +1,32 @@
 # Main Service Definition (`opencode.proto`)
 
-**Status:** ⏳ Work in Progress  
-**Last Updated:** 2026-01-04
+**Status:** ✅ Complete  
+**Last Updated:** 2026-01-05
 
 ---
 
 ## Purpose
 
 Aggregate all sub-services into a single gRPC service definition. This is the entry point for the Blazor frontend to communicate with the Rust backend.
+
+---
+
+## Source of Truth
+
+This proto file aggregates all other proto definitions. The source of truth for each imported proto is its corresponding JSON Schema files:
+
+| Import | Proto Doc | JSON Schema Files | Status |
+|--------|-----------|-------------------|--------|
+| `model.proto` | [01-model.md](./01-model.md) | `modelInfo.schema.json`, `modelCost.schema.json`, `modelCapabilities.schema.json`, etc. | ✅ Complete |
+| `provider.proto` | [02-provider.md](./02-provider.md) | `providerInfo.schema.json`, `providerOptions.schema.json`, etc. | ✅ Complete |
+| `auth.proto` | [03-auth.md](./03-auth.md) | `auth.schema.json`, `apiAuth.schema.json`, `oauth.schema.json`, etc. | ✅ Complete |
+| `session.proto` | [04-session.md](./04-session.md) | `sessionInfo.schema.json`, `sessionTime.schema.json`, `sessionSummary.schema.json`, etc. | ✅ Complete |
+| `message.proto` | [05-message.md](./05-message.md) | `message.schema.json`, `userMessage.schema.json`, `assistantMessage.schema.json`, `*Part.schema.json`, etc. | ✅ Complete |
+| `tool.proto` | [06-tool.md](./06-tool.md) | `toolState.schema.json`, `toolPart.schema.json`, `permissionRequest.schema.json`, etc. | ✅ Complete |
+| `agent.proto` | [07-agent.md](./07-agent.md) | `agentInfo.schema.json`, `agentModel.schema.json` | ✅ Complete |
+| `event.proto` | [08-event.md](./08-event.md) | `event.schema.json`, `globalEvent.schema.json`, `*Event.schema.json`, `sessionStatus.schema.json` | ✅ Complete |
+
+**All imported proto files have corresponding JSON Schema definitions.**
 
 ---
 
@@ -56,6 +75,7 @@ service OpenCodeService {
 
   // Event Streaming
   rpc SubscribeGlobalEvents(Empty) returns (stream GlobalEvent);
+  rpc SubscribeEvents(Empty) returns (stream Event);
 }
 ```
 
@@ -80,6 +100,7 @@ service OpenCodeService {
 | Auth | `GetProviderStatus` | `Empty` | `ProviderStatus` | `GET /provider` |
 | Auth | `SwitchProviderAuth` | `SwitchProviderAuthRequest` | `Empty` | Internal state |
 | Event | `SubscribeGlobalEvents` | `Empty` | `stream GlobalEvent` | `GET /global/event` (SSE) |
+| Event | `SubscribeEvents` | `Empty` | `stream Event` | `GET /event` (SSE) |
 
 ---
 
@@ -147,8 +168,28 @@ var sessions = await client.ListSessionsAsync(new Empty());
 
 ---
 
+## Verification
+
+All imported proto files are now complete with JSON Schema definitions:
+
+- ✅ `model.proto` - 8 JSON Schema files
+- ✅ `provider.proto` - 6 JSON Schema files  
+- ✅ `auth.proto` - 4 JSON Schema files
+- ✅ `session.proto` - 10 JSON Schema files
+- ✅ `message.proto` - 20 JSON Schema files
+- ✅ `tool.proto` - 9 JSON Schema files
+- ✅ `agent.proto` - 2 JSON Schema files
+- ✅ `event.proto` - 13 JSON Schema files
+
+**Total: 72+ JSON Schema files defining the complete data contract.**
+
+---
+
 ## TODO
 
+- [x] Define all RPC methods
+- [x] Map RPC methods to OpenCode server endpoints
+- [x] Document all imported proto files with JSON Schema sources
 - [ ] Implement all RPC methods in Rust backend
 - [ ] Generate C# client from proto files
 - [ ] Test end-to-end with Blazor frontend

@@ -30,7 +30,7 @@ These JSON Schema files are the authoritative specification. The protobuf defini
 | `*Part.schema.json` + `*Message.schema.json` + `*Error.schema.json` (20 files) | `message.proto` | ✅ Complete |
 | `toolState.schema.json` + 8 related | `tool.proto` | ✅ Complete |
 | `agentInfo.schema.json` + `agentModel.schema.json` | `agent.proto` | ✅ Complete |
-| (none yet) | `event.proto` | ⏳ WIP |
+| `event.schema.json` + `globalEvent.schema.json` + 11 event schemas | `event.proto` | ✅ Complete |
 
 **GitHub Issue:** [anomalyco/opencode#6879](https://github.com/anomalyco/opencode/issues/6879)  
 **PoC Branch:** [TonyMarkham/opencode@feature/json-schema-poc](https://github.com/TonyMarkham/opencode/tree/feature/json-schema-poc)
@@ -63,8 +63,8 @@ proto/
 | [05-message.md](./05-message.md) | User/assistant messages | ✅ Complete |
 | [06-tool.md](./06-tool.md) | Tool execution state | ✅ Complete |
 | [07-agent.md](./07-agent.md) | Agent listing | ✅ Complete |
-| [08-event.md](./08-event.md) | SSE event streaming | ⏳ WIP |
-| [09-opencode.md](./09-opencode.md) | Main service aggregator | ⏳ WIP |
+| [08-event.md](./08-event.md) | SSE event streaming | ✅ Complete |
+| [09-opencode.md](./09-opencode.md) | Main service aggregator | ✅ Complete |
 
 ## Adding New Schemas
 
@@ -173,6 +173,18 @@ fn main() {
 ---
 
 ## Version History
+
+### 1.6.0 (2026-01-05)
+
+- **Event schemas completed** (13 new JSON Schema files)
+- Added JSON Schema for event types: `event`, `globalEvent`, `sessionStatus`
+- Added JSON Schema for message events: `messageUpdatedEvent`, `messageRemovedEvent`, `messagePartUpdatedEvent`, `messagePartRemovedEvent`
+- Added JSON Schema for session events: `sessionCreatedEvent`, `sessionUpdatedEvent`, `sessionDeletedEvent`, `sessionStatusEvent`
+- Added JSON Schema for permission events: `permissionAskedEvent`, `permissionRepliedEvent`
+- Refactored `status.ts` and `server.ts` to use generated validators
+- Updated `08-event.md` with comprehensive cross-reference tables (13 schemas verified)
+- Updated `09-opencode.md` to Complete (all imported protos now have JSON Schema)
+- **All 9 proto documentation files now complete**
 
 ### 1.5.0 (2026-01-05)
 
