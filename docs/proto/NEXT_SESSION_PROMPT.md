@@ -1,8 +1,8 @@
-# Next Session: Create JSON Schema for Message Types
+# Next Session: Create JSON Schema for Agent Types
 
 ## Your Task
 
-Create JSON Schema definitions for message types by reading the **TypeScript/Zod source code** in the OpenCode repository, then update the protobuf documentation to reference these schemas.
+Create JSON Schema definitions for agent types by reading the **TypeScript/Zod source code** in the OpenCode repository, then update the protobuf documentation to reference these schemas.
 
 ---
 
@@ -11,7 +11,7 @@ Create JSON Schema definitions for message types by reading the **TypeScript/Zod
 **Before doing ANY work, you MUST read:**
 
 1. **`docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md`** — The step-by-step process you MUST follow
-2. **This prompt in full** — Contains specific guidance for message types
+2. **This prompt in full** — Contains specific guidance for agent types
 
 **The process document contains critical verification steps (4.2 and 5.3) that you MUST NOT skip.** These require explicit field-by-field comparison tables. Do not claim "verified" without creating these tables.
 
@@ -27,9 +27,9 @@ TypeScript/Zod (SOURCE)  →  JSON Schema (YOU CREATE)  →  Protobuf Doc (YOU U
    Read this first           Write these files          Update to reference schemas
 ```
 
-- **Source of truth:** TypeScript/Zod definitions in `submodules/opencode/packages/opencode/src/session/message-v2.ts`
+- **Source of truth:** TypeScript/Zod definitions in OpenCode source
 - **What you create:** JSON Schema files in `submodules/opencode/schema/`
-- **What you update:** Protobuf doc at `docs/proto/05-message.md` (THE ULTIMATE GOAL)
+- **What you update:** Protobuf doc at `docs/proto/07-agent.md` (THE ULTIMATE GOAL)
 
 ---
 
@@ -38,156 +38,51 @@ TypeScript/Zod (SOURCE)  →  JSON Schema (YOU CREATE)  →  Protobuf Doc (YOU U
 | Priority | File | Purpose |
 |----------|------|---------|
 | 1 | `docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md` | **THE PROCESS** — Follow every step |
-| 2 | `docs/proto/05-message.md` | Proto doc you will update (Step 5) |
-| 3 | `docs/proto/06-tool.md` | Completed example — reference for quality |
-| 4 | `docs/proto/04-session.md` | Completed example — reference for quality |
+| 2 | `docs/proto/07-agent.md` | Proto doc you will update (Step 5) |
+| 3 | `docs/proto/05-message.md` | Completed example — reference for quality |
+| 4 | `docs/proto/06-tool.md` | Completed example — reference for quality |
 
 ---
 
-## TypeScript Source Location
+## TypeScript Source Locations
 
-**All message types are in a single file:**
+**Find the agent types:**
 
+```bash
+cd submodules/opencode
+rg "export.*Agent" packages/opencode/src/ --type ts -l
 ```
-submodules/opencode/packages/opencode/src/session/message-v2.ts
-```
 
-**Key types to schematize:**
+**Key files to investigate:**
 
-### Already Done (DO NOT recreate):
-- `FilePart` — `filePart.schema.json` ✅
-- `FilePartSource` — `filePartSource.schema.json` ✅
-- `FileSource` — `fileSource.schema.json` ✅
-- `SymbolSource` — `symbolSource.schema.json` ✅
-- `ResourceSource` — `resourceSource.schema.json` ✅
-- `FilePartSourceText` — `filePartSourceText.schema.json` ✅
-- `ToolPart` — `toolPart.schema.json` ✅
-- `ToolState*` — All tool state schemas ✅
+- `packages/opencode/src/acp/agent.ts` - Main agent definitions
+- `packages/opencode/src/config/config.ts` - Agent configuration
+- `packages/opencode/src/tool/registry.ts` - Agent registry
 
-### TODO (You create these):
+---
 
-| Type | Location | Description |
-|------|----------|-------------|
-| `PartBase` | lines 37-41 | Base schema for all parts (id, sessionID, messageID) |
-| `TextPart` | lines 60-73 | Text content part |
-| `ReasoningPart` | lines 75-85 | Reasoning/thinking content |
-| `SnapshotPart` | lines 43-49 | Snapshot reference part |
-| `PatchPart` | lines 51-58 | Patch/diff part |
-| `AgentPart` | lines 143-155 | Agent reference part |
-| `CompactionPart` | lines 157-163 | Compaction marker part |
-| `SubtaskPart` | lines 165-172 | Subtask reference part |
-| `RetryPart` | lines 174-184 | Retry marker with error |
-| `StepStartPart` | lines 186-193 | Step start marker |
-| `StepFinishPart` | lines 195-211 | Step finish with tokens/cost |
-| `Part` | lines 288-305 | Discriminated union of ALL parts |
-| `User` | lines 263-286 | User message |
-| `Assistant` | lines 308-330+ | Assistant message |
+## Expected Types to Schematize
 
-**Note:** Line numbers reference commit `21dc3c24d`. The current file may have different line numbers due to refactoring. Use `git show 21dc3c24d:packages/opencode/src/session/message-v2.ts` to see the original.
+Based on the current `07-agent.md` proto doc:
+
+| Type | Description |
+|------|-------------|
+| `AgentInfo` | Agent metadata (name, description, mode, color, built_in) |
+| `AgentList` | List of agents |
+
+**Note:** The actual TypeScript source may have more or different types. Read the source first.
 
 ---
 
 ## Schemas to Create
 
-Based on the TypeScript source:
+Based on investigation of the TypeScript source:
 
 ```
 submodules/opencode/schema/
-├── partBase.schema.json          # Optional - can inline fields instead
-├── textPart.schema.json
-├── reasoningPart.schema.json
-├── snapshotPart.schema.json
-├── patchPart.schema.json
-├── agentPart.schema.json
-├── compactionPart.schema.json
-├── subtaskPart.schema.json
-├── retryPart.schema.json
-├── stepStartPart.schema.json
-├── stepFinishPart.schema.json
-├── part.schema.json              # Discriminated union (oneOf)
-├── userMessage.schema.json
-└── assistantMessage.schema.json
+├── agentInfo.schema.json       # Agent metadata
+└── agentList.schema.json       # List of agents (if needed)
 ```
-
----
-
-## Handling PartBase Extension
-
-All parts extend `PartBase`:
-
-```typescript
-const PartBase = z.object({
-  id: z.string(),
-  sessionID: z.string(),
-  messageID: z.string(),
-})
-
-export const TextPart = PartBase.extend({
-  type: z.literal("text"),
-  text: z.string(),
-  // ...
-})
-```
-
-**Two options:**
-
-1. **Inline the fields** (simpler) — Each part schema includes `id`, `sessionID`, `messageID` directly
-2. **Use `allOf`** (DRY but complex) — Reference a `partBase.schema.json`
-
-**Recommendation:** Inline the fields. It's what was done for `toolPart.schema.json` and `filePart.schema.json`.
-
----
-
-## Handling the Part Discriminated Union
-
-The `Part` type uses Zod's `discriminatedUnion` on `type`:
-
-```typescript
-export const Part = z
-  .discriminatedUnion("type", [
-    TextPart,
-    SubtaskPart,
-    ReasoningPart,
-    FilePart,
-    ToolPart,
-    StepStartPart,
-    StepFinishPart,
-    SnapshotPart,
-    PatchPart,
-    AgentPart,
-    RetryPart,
-    CompactionPart,
-  ])
-```
-
-In JSON Schema:
-
-```json
-{
-  "oneOf": [
-    { "$ref": "textPart.schema.json" },
-    { "$ref": "reasoningPart.schema.json" },
-    ...
-  ]
-}
-```
-
-The generator will auto-detect the `type` discriminator and generate `z.discriminatedUnion()`.
-
----
-
-## Handling Nested Types
-
-Some parts have nested objects that may need their own schemas:
-
-- `StepFinishPart.tokens` — Object with `input`, `output`, `reasoning`, `cache`
-- `RetryPart.error` — References `APIError.Schema`
-- `User.summary` — Optional object with `title`, `body`, `diffs`
-- `User.model` — Object with `providerID`, `modelID`
-- `Assistant.time` — Object with `created`, `completed?`
-- `Assistant.error` — Discriminated union of error types
-
-**Decision point:** Create separate schemas for these, or inline them. For complex types used in multiple places, create separate schemas.
 
 ---
 
@@ -224,7 +119,7 @@ For EACH schema you create, you MUST:
 For EACH schema, you MUST:
 
 1. Read your JSON Schema
-2. Read the protobuf message you wrote in `05-message.md`
+2. Read the protobuf message you wrote in `07-agent.md`
 3. Create an explicit field-by-field comparison table
 4. Verify field counts match
 5. Verify types match (using the mapping table in SCHEMA_DEVELOPMENT_PROCESS.md)
@@ -238,30 +133,15 @@ For EACH schema, you MUST:
 
 ### 1. New Schema Files
 
-All schemas listed in "Schemas to Create" section above.
+All agent-related schemas created in `submodules/opencode/schema/`.
 
-### 2. Refactored TypeScript
+### 2. Refactored TypeScript (if applicable)
 
-Replace inline Zod definitions in `message-v2.ts` with imports from `@generated/validators/*`:
-
-```typescript
-// Before
-export const TextPart = PartBase.extend({
-  type: z.literal("text"),
-  text: z.string(),
-  // ... 10+ lines
-})
-
-// After
-import { textPartSchema, type TextPart as GeneratedTextPart } from "@generated/validators/textPart"
-
-export const TextPart = textPartSchema
-export type TextPart = GeneratedTextPart
-```
+If inline Zod definitions exist, replace them with imports from `@generated/validators/*`.
 
 ### 3. Updated Proto Doc
 
-Update `docs/proto/05-message.md`:
+Update `docs/proto/07-agent.md`:
 - Status changed to ✅ Complete
 - Source of Truth section pointing to JSON Schemas
 - Protobuf messages matching JSON Schema structure
@@ -279,15 +159,26 @@ Update `docs/proto/05-message.md`:
 
 ---
 
-## Lessons from Previous Session
+## ⛔ HARD RULES - VIOLATIONS ARE UNACCEPTABLE
 
-The following mistakes were made in the tool schema session. **Do not repeat them:**
+1. **DO NOT COMMIT WITHOUT EXPLICIT USER APPROVAL** — Always show the diff and ask "Do you want me to commit?" before running `git commit`
+2. **DO NOT MISREPRESENT WORK DONE** — If you made changes to the submodule, say so. Do not claim you didn't when you did. This is gaslighting.
+3. **VERIFY STATUS BEFORE UPDATING** — Before marking anything complete in README, read the actual file to confirm its status
+
+---
+
+## Lessons from Previous Sessions
+
+The following mistakes were made in earlier sessions. **Do not repeat them:**
 
 1. **Skipped verification steps** — Claimed "verified" without creating comparison tables
 2. **Worked from memory** — Did not re-read files before making claims
 3. **Read wrong prompt** — Read `NEXT_SESSION_PROMPT.md` from repo root instead of `docs/proto/`
 4. **Skipped build step** — Did not run `bun run build` before claiming completion
 5. **Marked complete prematurely** — Updated todo status before verification was done
+6. **Committed without approval** — Ran `git commit` without asking user first
+7. **Gaslighted about work done** — Claimed "I did NOT make changes to the submodule" when submodule changes were the primary deliverable
+8. **Perpetuated stale status** — Copied WIP status from README without checking if actual file was already complete
 
 **The guardrails in SCHEMA_DEVELOPMENT_PROCESS.md exist because of these failures. Follow them.**
 
@@ -296,9 +187,35 @@ The following mistakes were made in the tool schema session. **Do not repeat the
 ## Starting Point
 
 1. Read `docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md` in full
-2. Read the TypeScript source: `git show 21dc3c24d:packages/opencode/src/session/message-v2.ts`
-3. Start with simpler types first (TextPart, ReasoningPart) before complex ones (Part, User, Assistant)
-4. Create schemas incrementally, running `bun run generate:schemas` after each batch
-5. Do verification as you go, not at the end
+2. Find and read the TypeScript source for agent types
+3. Create schemas incrementally, running `bun run generate:schemas` after each batch
+4. Do verification as you go, not at the end
 
 **Do not skip steps. Do not work from memory. Create explicit verification tables.**
+
+---
+
+## After Agent: What's Next
+
+Once agent schemas are complete, the remaining WIP items are:
+
+| File | Description | Status |
+|------|-------------|--------|
+| `08-event.md` | SSE event streaming | ⏳ WIP |
+| `09-opencode.md` | Main service aggregator | ⏳ WIP |
+
+Update this prompt after completing agent to point to the next item.
+
+---
+
+## Before Any Commit
+
+**STOP. Do not run `git commit` until you have:**
+
+1. Shown the user `git status` and `git diff --stat` output
+2. Asked explicitly: "Do you want me to commit these changes?"
+3. Received clear approval (e.g., "Yes", "Go ahead", "Commit it")
+
+**If the user hasn't approved, DO NOT COMMIT.**
+
+This applies to BOTH the submodule (`submodules/opencode`) AND the main repo.

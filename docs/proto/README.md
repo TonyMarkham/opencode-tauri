@@ -27,7 +27,7 @@ These JSON Schema files are the authoritative specification. The protobuf defini
 | `providerInfo.schema.json` | `provider.proto` | ✅ Complete |
 | `auth.schema.json` | `auth.proto` | ✅ Complete |
 | `sessionInfo.schema.json` | `session.proto` | ✅ Complete |
-| (none yet) | `message.proto` | ⏳ WIP |
+| `*Part.schema.json` + `*Message.schema.json` + `*Error.schema.json` (20 files) | `message.proto` | ✅ Complete |
 | `toolState.schema.json` + 8 related | `tool.proto` | ✅ Complete |
 | (none yet) | `agent.proto` | ⏳ WIP |
 | (none yet) | `event.proto` | ⏳ WIP |
@@ -58,9 +58,9 @@ proto/
 |------|-------------|--------|
 | [01-model.md](./01-model.md) | Model metadata, capabilities, cost, limits | ✅ Complete |
 | [02-provider.md](./02-provider.md) | Provider management, SDK options | ✅ Complete |
-| [03-auth.md](./03-auth.md) | Authentication per provider | ⏳ WIP |
+| [03-auth.md](./03-auth.md) | Authentication per provider | ✅ Complete |
 | [04-session.md](./04-session.md) | Session/tab management | ✅ Complete |
-| [05-message.md](./05-message.md) | User/assistant messages | ⏳ WIP |
+| [05-message.md](./05-message.md) | User/assistant messages | ✅ Complete |
 | [06-tool.md](./06-tool.md) | Tool execution state | ✅ Complete |
 | [07-agent.md](./07-agent.md) | Agent listing | ⏳ WIP |
 | [08-event.md](./08-event.md) | SSE event streaming | ⏳ WIP |
@@ -173,6 +173,15 @@ fn main() {
 ---
 
 ## Version History
+
+### 1.4.0 (2026-01-05)
+
+- **Message schemas completed** (20 new JSON Schema files)
+- Added JSON Schema for Part types: `textPart`, `reasoningPart`, `snapshotPart`, `patchPart`, `agentPart`, `compactionPart`, `subtaskPart`, `stepStartPart`, `stepFinishPart`, `retryPart`, `part`
+- Added JSON Schema for Message types: `userMessage`, `assistantMessage`, `message`
+- Added JSON Schema for Error types: `apiError`, `providerAuthError`, `unknownError`, `outputLengthError`, `abortedError`, `messageError`
+- Refactored `message-v2.ts` to use generated validators
+- Updated `05-message.md` with comprehensive cross-reference tables (17 schemas verified)
 
 ### 1.3.0 (2026-01-05)
 
