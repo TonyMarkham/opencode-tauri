@@ -10,15 +10,15 @@ Build a new Tauri + Blazor WebAssembly desktop client as an alternative to egui,
 
 ### Step 1: Extract Shared Client Core
 
-- ✅ Create shared workspace at `clients/tauri-blazor/`
+- ✅ Create workspace at repository root
 - ✅ Build production-grade `backend/client-core/` crate from scratch
-- ✅ Build production-grade `common/` crate for shared utilities
-- ⏭️ Extract from egui (DEFERRED - built fresh code instead)
+- ✅ Build production-grade `models/` crate for shared utilities
+- ⏭️ Extract from egui (DEFERRED - built fresh code instead, egui now in submodules/opencode-egui/)
 - ⏭️ Update egui to use shared crate (DEFERRED - egui unchanged)
 
 ### Step 2: Create Tauri-Blazor Directory Structure
 
-- ✅ Create `clients/tauri-blazor/` workspace layout
+- ✅ Create workspace layout at repository root
 - ✅ Create workspace Cargo.toml with proper dependencies
 - ✅ Create README.md documenting structure
 - ⏭️ Set up Tauri project skeleton (`apps/desktop/opencode/`) (DEFERRED to Session 2)
@@ -30,8 +30,8 @@ Build a new Tauri + Blazor WebAssembly desktop client as an alternative to egui,
 **Deliverables:**
 
 - ✅ Working `backend/client-core` with discovery + spawn logic
-- ✅ Working `common` crate with ErrorLocation utilities
-- ✅ egui client unchanged (no breaking changes)
+- ✅ Working `models` crate with ErrorLocation utilities
+- ✅ egui client unchanged (no breaking changes, now in submodules/opencode-egui/)
 - ⏭️ Tauri project structure (deferred to Session 2)
 
 ---
@@ -76,7 +76,7 @@ Build a new Tauri + Blazor WebAssembly desktop client as an alternative to egui,
 
 ### Step 1: Initialize Blazor WASM Project
 
-- ✅ Create `frontend/` directory at `clients/tauri-blazor/frontend/desktop/opencode/`
+- ✅ Create `frontend/` directory at `frontend/desktop/opencode/`
 - ✅ Configure Opencode.csproj (.NET 10.0, Radzen 8.4.2, Markdig 0.44.0)
 - ✅ Set up Program.cs with Radzen dependency injection
 - ✅ Configure publish to `apps/desktop/opencode/frontend/`
@@ -115,7 +115,7 @@ Build a new Tauri + Blazor WebAssembly desktop client as an alternative to egui,
 
 ## Session 4: Data Models & gRPC Service Infrastructure
 
-**Goal:** Define comprehensive protobuf schema and gRPC service interface based on egui client audit. Group data models logically by domain: Sessions, Messages, Tools, Agents, Auth, and Events.
+**Goal:** Define comprehensive protobuf schema and gRPC service interface based on opencode-egui client audit (submodules/opencode-egui/). Group data models logically by domain: Sessions, Messages, Tools, Agents, Auth, and Events.
 
 ---
 
@@ -159,7 +159,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
    - **Maps to:** OpenCode server `GET /config/providers` endpoint
 
 6. **Comprehensive Tool State**
-   - Tool execution includes logs, metadata, timing (learned from egui audit)
+   - Tool execution includes logs, metadata, timing (learned from opencode-egui audit in submodules/)
    - Supports rich UI (progress indicators, log viewers, timing charts)
    - **Why:** Users need visibility into what tools are doing
 
@@ -291,7 +291,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 ### Step 1: OAuth Integration
 
-- Extract auth logic from egui to shared core
+- Extract auth logic from opencode-egui (submodules/opencode-egui/) to shared core
 - Create `commands/auth.rs` in Tauri
 - Implement OAuth flow for Anthropic
 - Add API key management
@@ -338,7 +338,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 ### Step 3: Documentation
 
 - Update README with usage instructions
-- Document differences from egui client
+- Document differences from opencode-egui client (submodules/opencode-egui/)
 - Create "Choosing a Desktop Client" guide
 
 **Status:** ⏳ Pending
@@ -459,7 +459,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Accomplishments:**
 
-- ✅ Created workspace at `clients/tauri-blazor/` with Cargo.toml
+- ✅ Created workspace at repository root with Cargo.toml
 - ✅ Built `backend/client-core/` crate from scratch (NOT extracted from egui)
 - ✅ Built `common/` crate for shared ErrorLocation utilities
 - ✅ Implemented production-grade error handling:
@@ -482,22 +482,22 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Files Created:**
 
-- `clients/tauri-blazor/Cargo.toml` - workspace root
-- `clients/tauri-blazor/common/Cargo.toml` - shared utilities
-- `clients/tauri-blazor/common/src/lib.rs` - ErrorLocation trait
-- `clients/tauri-blazor/backend/client-core/Cargo.toml` - core logic
-- `clients/tauri-blazor/backend/client-core/src/lib.rs` - public API
-- `clients/tauri-blazor/backend/client-core/src/error.rs` - error types
-- `clients/tauri-blazor/backend/client-core/src/discovery/mod.rs` - discovery module
-- `clients/tauri-blazor/backend/client-core/src/discovery/process.rs` - process logic
-- `clients/tauri-blazor/backend/client-core/src/spawn/mod.rs` - spawn module
-- `clients/tauri-blazor/README.md` - project structure docs
+- `Cargo.toml` - workspace root
+- `models/Cargo.toml` - shared utilities
+- `models/src/lib.rs` - ErrorLocation trait
+- `backend/client-core/Cargo.toml` - core logic
+- `backend/client-core/src/lib.rs` - public API
+- `backend/client-core/src/error/` - error types module
+- `backend/client-core/src/discovery/mod.rs` - discovery module
+- `backend/client-core/src/discovery/process.rs` - process logic
+- `backend/client-core/src/spawn/mod.rs` - spawn module
+- `README.md` - project structure docs
 
 **Technical Decisions:**
 
-- **Built fresh instead of extracting from egui** - Allows production-grade code without egui constraints
-- **Located code in `clients/tauri-blazor/backend/client-core/`** - Not `crates/` since it's tauri-specific for now
-- **Created `common/` crate** - Shared utilities between backend crates
+- **Built fresh instead of extracting from egui** - Allows production-grade code without egui constraints (egui now in submodules/opencode-egui/)
+- **Located code in `backend/client-core/`** - Repository root structure, not nested in clients/
+- **Created `models/` crate** - Shared utilities between backend crates
 - **ErrorLocation pattern** - Consistent error tracking across all error types
 - **OnceLock for regex** - Compile once, reuse across all calls
 - **Exponential backoff everywhere** - Robust retry logic for health checks and process cleanup
@@ -506,7 +506,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 **Deferred to Session 2:**
 
 - ~~Tauri scaffold (`apps/desktop/opencode/`)~~ ✅ Complete
-- No changes to egui client (remains independent)
+- No changes to egui client (remains independent in submodules/opencode-egui/)
 
 **Next Steps:**
 
@@ -518,7 +518,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Accomplishments:**
 
-- ✅ Created Blazor WASM project at `clients/tauri-blazor/frontend/desktop/opencode/`
+- ✅ Created Blazor WASM project at `frontend/desktop/opencode/`
 - ✅ Configured .NET 10.0 with Radzen 8.4.2 + Markdig dependencies
 - ✅ Set up Program.cs with Radzen service registration + IServerService DI
 - ✅ Created `IServerService` interface with 4 async methods
@@ -549,24 +549,24 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Files Created:**
 
-- `clients/tauri-blazor/frontend/desktop/opencode/Opencode.csproj` - .NET 10 Blazor project
-- `clients/tauri-blazor/frontend/desktop/opencode/Program.cs` - DI configuration
-- `clients/tauri-blazor/frontend/desktop/opencode/_Imports.razor` - Global usings
-- `clients/tauri-blazor/frontend/desktop/opencode/App.razor` - Root component with Radzen services
-- `clients/tauri-blazor/frontend/desktop/opencode/Layout/MainLayout.razor` - Main layout
-- `clients/tauri-blazor/frontend/desktop/opencode/Layout/NavMenu.razor` - Navigation menu
-- `clients/tauri-blazor/frontend/desktop/opencode/Pages/Home.razor` - Server status page
-- `clients/tauri-blazor/frontend/desktop/opencode/Pages/NotFound.razor` - 404 page
-- `clients/tauri-blazor/frontend/desktop/opencode/Services/IServerService.cs` - Service interface
-- `clients/tauri-blazor/frontend/desktop/opencode/Services/ServerService.cs` - Service implementation
-- `clients/tauri-blazor/frontend/desktop/opencode/Services/TauriCommands.cs` - Command constants
-- `clients/tauri-blazor/frontend/desktop/opencode/Services/TauriConstants.cs` - Tauri constants
-- `clients/tauri-blazor/frontend/desktop/opencode/Services/Exceptions/ServerOperationException.cs` - Exception types
-- `clients/tauri-blazor/apps/desktop/opencode/frontend/` - Published Blazor output
+- `frontend/desktop/opencode/Opencode.csproj` - .NET 10 Blazor project
+- `frontend/desktop/opencode/Program.cs` - DI configuration
+- `frontend/desktop/opencode/_Imports.razor` - Global usings
+- `frontend/desktop/opencode/App.razor` - Root component with Radzen services
+- `frontend/desktop/opencode/Layout/MainLayout.razor` - Main layout
+- `frontend/desktop/opencode/Layout/NavMenu.razor` - Navigation menu
+- `frontend/desktop/opencode/Pages/Home.razor` - Server status page
+- `frontend/desktop/opencode/Pages/NotFound.razor` - 404 page
+- `frontend/desktop/opencode/Services/IServerService.cs` - Service interface
+- `frontend/desktop/opencode/Services/ServerService.cs` - Service implementation
+- `frontend/desktop/opencode/Services/TauriCommands.cs` - Command constants
+- `frontend/desktop/opencode/Services/TauriConstants.cs` - Tauri constants
+- `frontend/desktop/opencode/Services/Exceptions/ServerOperationException.cs` - Exception types
+- `apps/desktop/opencode/frontend/` - Published Blazor output
 
 **Technical Decisions:**
 
-- **Separate frontend directory** - Located Blazor project at `clients/tauri-blazor/frontend/desktop/opencode/` (not inside Rust app) for cleaner separation of concerns
+- **Separate frontend directory** - Located Blazor project at `frontend/desktop/opencode/` (not inside Rust app) for cleaner separation of concerns
 - **IJSRuntime pattern** - Used `eval` method to invoke `window.__TAURI__.invoke()` (cleaner than alternatives)
 - **JsonElement intermediate** - Deserialized Tauri responses via JsonElement before mapping to ServerInfo
 - **Snake case naming** - Configured `JsonNamingPolicy.SnakeCaseLower` to match Rust API field names
@@ -653,8 +653,8 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Files Modified:**
 
-- `clients/tauri-blazor/Cargo.toml` - Added `apps/desktop/opencode` member, renamed `common` → `models`
-- `clients/tauri-blazor/README.md` - Updated paths, documented `models/` crate
+- `Cargo.toml` - Added `apps/desktop/opencode` member, renamed `common` → `models`
+- `README.md` - Updated paths, documented `models/` crate
 - `models/src/lib.rs` - Added teaching-focused documentation (formerly `common/`)
 - `backend/client-core/Cargo.toml` - Updated dependency `common` → `models`
 - `backend/client-core/src/lib.rs` - Updated imports `common::` → `models::`
@@ -705,7 +705,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Risk:** Breaking egui client while extracting code
 
-- **Mitigation:** Test egui after each extraction, make changes incrementally
+- **Mitigation:** egui client isolated in submodules/opencode-egui/, no cross-contamination
 
 **Risk:** JSInterop for Tauri not working as expected
 
@@ -746,7 +746,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Timeline Estimate:** 8-10 weeks (1 session per week, with buffer for discoveries)
 
-**Note:** Sessions 4 & 4.5 expanded significantly after review of egui client revealed:
+**Note:** Sessions 4 & 4.5 expanded significantly after review of opencode-egui client (submodules/opencode-egui/) revealed:
 
 - Tab/session management complexity
 - Agent selection per tab
