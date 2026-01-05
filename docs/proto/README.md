@@ -1,6 +1,6 @@
 # Protobuf Schema Documentation
 
-**Version:** 1.3.0  
+**Version:** 1.5.0  
 **Last Updated:** 2026-01-05
 
 ---
@@ -29,7 +29,7 @@ These JSON Schema files are the authoritative specification. The protobuf defini
 | `sessionInfo.schema.json` | `session.proto` | ✅ Complete |
 | `*Part.schema.json` + `*Message.schema.json` + `*Error.schema.json` (20 files) | `message.proto` | ✅ Complete |
 | `toolState.schema.json` + 8 related | `tool.proto` | ✅ Complete |
-| (none yet) | `agent.proto` | ⏳ WIP |
+| `agentInfo.schema.json` + `agentModel.schema.json` | `agent.proto` | ✅ Complete |
 | (none yet) | `event.proto` | ⏳ WIP |
 
 **GitHub Issue:** [anomalyco/opencode#6879](https://github.com/anomalyco/opencode/issues/6879)  
@@ -62,7 +62,7 @@ proto/
 | [04-session.md](./04-session.md) | Session/tab management | ✅ Complete |
 | [05-message.md](./05-message.md) | User/assistant messages | ✅ Complete |
 | [06-tool.md](./06-tool.md) | Tool execution state | ✅ Complete |
-| [07-agent.md](./07-agent.md) | Agent listing | ⏳ WIP |
+| [07-agent.md](./07-agent.md) | Agent listing | ✅ Complete |
 | [08-event.md](./08-event.md) | SSE event streaming | ⏳ WIP |
 | [09-opencode.md](./09-opencode.md) | Main service aggregator | ⏳ WIP |
 
@@ -173,6 +173,14 @@ fn main() {
 ---
 
 ## Version History
+
+### 1.5.0 (2026-01-05)
+
+- **Agent schemas completed** (`agentInfo.schema.json`, `agentModel.schema.json`)
+- Added JSON Schema for: `AgentInfo`, `AgentModel`
+- Updated generator to support `minimum`/`maximum` constraints for numbers
+- Refactored `agent.ts` to use generated validators
+- Updated `07-agent.md` with comprehensive cross-reference tables (2 schemas verified)
 
 ### 1.4.0 (2026-01-05)
 
