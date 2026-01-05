@@ -1,6 +1,6 @@
 # Protobuf Schema Documentation
 
-**Version:** 1.2.0  
+**Version:** 1.3.0  
 **Last Updated:** 2026-01-05
 
 ---
@@ -28,7 +28,7 @@ These JSON Schema files are the authoritative specification. The protobuf defini
 | `auth.schema.json` | `auth.proto` | ✅ Complete |
 | `sessionInfo.schema.json` | `session.proto` | ✅ Complete |
 | (none yet) | `message.proto` | ⏳ WIP |
-| (none yet) | `tool.proto` | ⏳ WIP |
+| `toolState.schema.json` + 8 related | `tool.proto` | ✅ Complete |
 | (none yet) | `agent.proto` | ⏳ WIP |
 | (none yet) | `event.proto` | ⏳ WIP |
 
@@ -61,7 +61,7 @@ proto/
 | [03-auth.md](./03-auth.md) | Authentication per provider | ⏳ WIP |
 | [04-session.md](./04-session.md) | Session/tab management | ✅ Complete |
 | [05-message.md](./05-message.md) | User/assistant messages | ⏳ WIP |
-| [06-tool.md](./06-tool.md) | Tool execution state | ⏳ WIP |
+| [06-tool.md](./06-tool.md) | Tool execution state | ✅ Complete |
 | [07-agent.md](./07-agent.md) | Agent listing | ⏳ WIP |
 | [08-event.md](./08-event.md) | SSE event streaming | ⏳ WIP |
 | [09-opencode.md](./09-opencode.md) | Main service aggregator | ⏳ WIP |
@@ -173,6 +173,13 @@ fn main() {
 ---
 
 ## Version History
+
+### 1.3.0 (2026-01-05)
+
+- **Tool schemas completed** (`toolState.schema.json` and 8 related schemas)
+- Added JSON Schema for: `ToolState`, `ToolStatePending`, `ToolStateRunning`, `ToolStateCompleted`, `ToolStateError`, `ToolPart`, `PermissionRequest`, `PermissionReply`, `PermissionToolContext`
+- Refactored `message-v2.ts` and `permission/next.ts` to use generated validators
+- Updated `tool.proto` with comprehensive cross-reference tables
 
 ### 1.2.0 (2026-01-05)
 

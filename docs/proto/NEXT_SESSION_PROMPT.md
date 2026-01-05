@@ -1,8 +1,19 @@
-# Next Session: Create JSON Schema for Tool Types
+# Next Session: Create JSON Schema for Message Types
 
 ## Your Task
 
-Create JSON Schema definitions for tool execution types by reading the **TypeScript/Zod source code** in the OpenCode repository, then update the protobuf documentation to reference these schemas.
+Create JSON Schema definitions for message types by reading the **TypeScript/Zod source code** in the OpenCode repository, then update the protobuf documentation to reference these schemas.
+
+---
+
+## ⚠️ CRITICAL: Read This First
+
+**Before doing ANY work, you MUST read:**
+
+1. **`docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md`** — The step-by-step process you MUST follow
+2. **This prompt in full** — Contains specific guidance for message types
+
+**The process document contains critical verification steps (4.2 and 5.3) that you MUST NOT skip.** These require explicit field-by-field comparison tables. Do not claim "verified" without creating these tables.
 
 ---
 
@@ -16,117 +27,93 @@ TypeScript/Zod (SOURCE)  →  JSON Schema (YOU CREATE)  →  Protobuf Doc (YOU U
    Read this first           Write these files          Update to reference schemas
 ```
 
-- **Source of truth:** TypeScript/Zod definitions in `submodules/opencode/packages/opencode/src/`
+- **Source of truth:** TypeScript/Zod definitions in `submodules/opencode/packages/opencode/src/session/message-v2.ts`
 - **What you create:** JSON Schema files in `submodules/opencode/schema/`
-- **What you update:** Protobuf doc at `docs/proto/06-tool.md` (Step 5 — the ultimate goal)
+- **What you update:** Protobuf doc at `docs/proto/05-message.md` (THE ULTIMATE GOAL)
 
 ---
 
-## Required Reading (Read These First)
+## Required Reading
 
-1. **Process Guide:** `docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md` — Follow this step-by-step
-2. **Proto Doc to Update:** `docs/proto/06-tool.md` — Update this AFTER creating schemas (Step 5)
-3. **Completed Examples:** `docs/proto/01-model.md`, `docs/proto/04-session.md` — Reference for expected output quality
+| Priority | File | Purpose |
+|----------|------|---------|
+| 1 | `docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md` | **THE PROCESS** — Follow every step |
+| 2 | `docs/proto/05-message.md` | Proto doc you will update (Step 5) |
+| 3 | `docs/proto/06-tool.md` | Completed example — reference for quality |
+| 4 | `docs/proto/04-session.md` | Completed example — reference for quality |
 
 ---
 
-## CRITICAL: Actual TypeScript Source Locations
+## TypeScript Source Location
 
-**The tool types are NOT in a separate tool file. They are in `message-v2.ts`:**
+**All message types are in a single file:**
 
 ```
 submodules/opencode/packages/opencode/src/session/message-v2.ts
 ```
 
-**Key types to schematize (lines 214-291):**
+**Key types to schematize:**
 
-1. `ToolStatePending` (lines 214-224) — Status: pending, has input/raw
-2. `ToolStateRunning` (lines 226-239) — Status: running, has input/title/metadata/time.start
-3. `ToolStateCompleted` (lines 241-258) — Status: completed, has input/output/title/metadata/time/attachments
-4. `ToolStateError` (lines 260-274) — Status: error, has input/error/metadata/time
-5. `ToolState` (lines 276-280) — Discriminated union of the above 4 states
-6. `ToolPart` (lines 282-291) — Tool call part with callID, tool name, state
+### Already Done (DO NOT recreate):
+- `FilePart` — `filePart.schema.json` ✅
+- `FilePartSource` — `filePartSource.schema.json` ✅
+- `FileSource` — `fileSource.schema.json` ✅
+- `SymbolSource` — `symbolSource.schema.json` ✅
+- `ResourceSource` — `resourceSource.schema.json` ✅
+- `FilePartSourceText` — `filePartSourceText.schema.json` ✅
+- `ToolPart` — `toolPart.schema.json` ✅
+- `ToolState*` — All tool state schemas ✅
 
-**Permission types are in `permission/next.ts` (lines 52-74):**
+### TODO (You create these):
 
-7. `PermissionRequest` (lines 52-69) — Permission request with patterns/metadata/tool context
-8. `Reply` (line 73) — Enum: "once", "always", "reject"
+| Type | Location | Description |
+|------|----------|-------------|
+| `PartBase` | lines 37-41 | Base schema for all parts (id, sessionID, messageID) |
+| `TextPart` | lines 60-73 | Text content part |
+| `ReasoningPart` | lines 75-85 | Reasoning/thinking content |
+| `SnapshotPart` | lines 43-49 | Snapshot reference part |
+| `PatchPart` | lines 51-58 | Patch/diff part |
+| `AgentPart` | lines 143-155 | Agent reference part |
+| `CompactionPart` | lines 157-163 | Compaction marker part |
+| `SubtaskPart` | lines 165-172 | Subtask reference part |
+| `RetryPart` | lines 174-184 | Retry marker with error |
+| `StepStartPart` | lines 186-193 | Step start marker |
+| `StepFinishPart` | lines 195-211 | Step finish with tokens/cost |
+| `Part` | lines 288-305 | Discriminated union of ALL parts |
+| `User` | lines 263-286 | User message |
+| `Assistant` | lines 308-330+ | Assistant message |
 
----
-
-## Important Discovery: Proto Doc Mismatch
-
-The current `06-tool.md` proto definition does NOT match the TypeScript source:
-
-| Proto Doc Field | TypeScript Equivalent | Notes |
-|-----------------|----------------------|-------|
-| `status = 3` (string) | `status` (literal union) | TS uses discriminated union, not string |
-| `input_json = 5` | `input` (z.record) | TS uses typed record, not JSON string |
-| `metadata_json = 9` | `metadata` (z.record) | TS uses typed record, not JSON string |
-| `logs = 8` | (not present) | Proto has logs, TS doesn't |
-| `call_id = 4` | `callID` in ToolPart | Different location |
-
-**You will need to update the proto doc to match the TypeScript source, not the other way around.**
+**Note:** Line numbers reference commit `21dc3c24d`. The current file may have different line numbers due to refactoring. Use `git show 21dc3c24d:packages/opencode/src/session/message-v2.ts` to see the original.
 
 ---
 
 ## Schemas to Create
 
-Based on the TypeScript source, create these schemas:
+Based on the TypeScript source:
 
-1. `toolStatePending.schema.json` — Pending tool state
-2. `toolStateRunning.schema.json` — Running tool state  
-3. `toolStateCompleted.schema.json` — Completed tool state
-4. `toolStateError.schema.json` — Error tool state
-5. `toolState.schema.json` — Discriminated union (oneOf)
-6. `toolPart.schema.json` — Tool call part (extends PartBase)
-7. `permissionRequest.schema.json` — Permission request
-8. `permissionReply.schema.json` — Reply enum
-
-**Note:** ToolPart references FilePart (already exists in session schemas).
-
----
-
-## Steps to Follow
-
-1. **Read the TypeScript source** — `message-v2.ts` lines 214-291 and `permission/next.ts` lines 52-74
-2. **Create JSON Schema files** — In `submodules/opencode/schema/`
-3. **Fresh Eyes Review** — Compare schema to TypeScript field-by-field (DO NOT SKIP)
-4. **Run generator** — `bun run generate:schemas`
-5. **Verify equivalence** — Compare generated Zod to original TypeScript Zod
-6. **Refactor TypeScript** — Replace inline Zod with generated validators
-7. **Run typecheck + tests** — Verify refactored code works
-8. **Update proto doc (THE GOAL)** — Update `docs/proto/06-tool.md` to match TypeScript source and reference JSON Schemas
-
----
-
-## Handling Discriminated Unions
-
-The `ToolState` type uses Zod's `discriminatedUnion` on `status`:
-
-```typescript
-export const ToolState = z
-  .discriminatedUnion("status", [ToolStatePending, ToolStateRunning, ToolStateCompleted, ToolStateError])
 ```
-
-In JSON Schema, use `oneOf`:
-
-```json
-{
-  "oneOf": [
-    { "$ref": "toolStatePending.schema.json" },
-    { "$ref": "toolStateRunning.schema.json" },
-    { "$ref": "toolStateCompleted.schema.json" },
-    { "$ref": "toolStateError.schema.json" }
-  ]
-}
+submodules/opencode/schema/
+├── partBase.schema.json          # Optional - can inline fields instead
+├── textPart.schema.json
+├── reasoningPart.schema.json
+├── snapshotPart.schema.json
+├── patchPart.schema.json
+├── agentPart.schema.json
+├── compactionPart.schema.json
+├── subtaskPart.schema.json
+├── retryPart.schema.json
+├── stepStartPart.schema.json
+├── stepFinishPart.schema.json
+├── part.schema.json              # Discriminated union (oneOf)
+├── userMessage.schema.json
+└── assistantMessage.schema.json
 ```
 
 ---
 
 ## Handling PartBase Extension
 
-Tool parts extend a base schema with common fields:
+All parts extend `PartBase`:
 
 ```typescript
 const PartBase = z.object({
@@ -135,13 +122,72 @@ const PartBase = z.object({
   messageID: z.string(),
 })
 
-export const ToolPart = PartBase.extend({
-  type: z.literal("tool"),
+export const TextPart = PartBase.extend({
+  type: z.literal("text"),
+  text: z.string(),
   // ...
 })
 ```
 
-You may want to create `partBase.schema.json` for reuse, or inline the fields.
+**Two options:**
+
+1. **Inline the fields** (simpler) — Each part schema includes `id`, `sessionID`, `messageID` directly
+2. **Use `allOf`** (DRY but complex) — Reference a `partBase.schema.json`
+
+**Recommendation:** Inline the fields. It's what was done for `toolPart.schema.json` and `filePart.schema.json`.
+
+---
+
+## Handling the Part Discriminated Union
+
+The `Part` type uses Zod's `discriminatedUnion` on `type`:
+
+```typescript
+export const Part = z
+  .discriminatedUnion("type", [
+    TextPart,
+    SubtaskPart,
+    ReasoningPart,
+    FilePart,
+    ToolPart,
+    StepStartPart,
+    StepFinishPart,
+    SnapshotPart,
+    PatchPart,
+    AgentPart,
+    RetryPart,
+    CompactionPart,
+  ])
+```
+
+In JSON Schema:
+
+```json
+{
+  "oneOf": [
+    { "$ref": "textPart.schema.json" },
+    { "$ref": "reasoningPart.schema.json" },
+    ...
+  ]
+}
+```
+
+The generator will auto-detect the `type` discriminator and generate `z.discriminatedUnion()`.
+
+---
+
+## Handling Nested Types
+
+Some parts have nested objects that may need their own schemas:
+
+- `StepFinishPart.tokens` — Object with `input`, `output`, `reasoning`, `cache`
+- `RetryPart.error` — References `APIError.Schema`
+- `User.summary` — Optional object with `title`, `body`, `diffs`
+- `User.model` — Object with `providerID`, `modelID`
+- `Assistant.time` — Object with `created`, `completed?`
+- `Assistant.error` — Discriminated union of error types
+
+**Decision point:** Create separate schemas for these, or inline them. For complex types used in multiple places, create separate schemas.
 
 ---
 
@@ -152,54 +198,107 @@ cd submodules/opencode
 bun run generate:schemas   # Validate + generate
 bun run typecheck          # Verify types
 bun test                   # Run tests (544+ should pass)
+bun run build              # Production build (11 platforms)
 ```
+
+**Run ALL of these before claiming completion.**
+
+---
+
+## Verification Requirements
+
+### Step 4.2: TypeScript → JSON Schema → Generated Zod
+
+For EACH schema you create, you MUST:
+
+1. Read the original TypeScript Zod definition
+2. Read your JSON Schema
+3. Read the generated validator
+4. Create an explicit field-by-field comparison table
+5. Verify field counts match
+
+**Do NOT claim "verified" without showing the comparison tables.**
+
+### Step 5.3: JSON Schema → Protobuf
+
+For EACH schema, you MUST:
+
+1. Read your JSON Schema
+2. Read the protobuf message you wrote in `05-message.md`
+3. Create an explicit field-by-field comparison table
+4. Verify field counts match
+5. Verify types match (using the mapping table in SCHEMA_DEVELOPMENT_PROCESS.md)
+6. Verify required/optional matches
+
+**Do NOT claim "verified" without showing the comparison tables.**
 
 ---
 
 ## Expected Deliverables
 
-1. New schema files in `submodules/opencode/schema/`:
-   - `toolStatePending.schema.json`
-   - `toolStateRunning.schema.json`
-   - `toolStateCompleted.schema.json`
-   - `toolStateError.schema.json`
-   - `toolState.schema.json`
-   - `toolPart.schema.json`
-   - `permissionRequest.schema.json`
-   - `permissionReply.schema.json`
+### 1. New Schema Files
 
-2. Updated `docs/proto/06-tool.md`:
-   - Proto definition updated to match TypeScript source
-   - Source of Truth section pointing to JSON Schemas
-   - JSON Schema Cross-Reference table
-   - Status changed to ✅ Complete
+All schemas listed in "Schemas to Create" section above.
 
-3. Refactored TypeScript:
-   - `message-v2.ts` tool types use generated validators
-   - `permission/next.ts` Request/Reply use generated validators
+### 2. Refactored TypeScript
 
-4. All verification passing:
-   - `bun run generate:schemas` ✓
-   - `bun run typecheck` ✓
-   - `bun test` ✓
+Replace inline Zod definitions in `message-v2.ts` with imports from `@generated/validators/*`:
 
----
+```typescript
+// Before
+export const TextPart = PartBase.extend({
+  type: z.literal("text"),
+  text: z.string(),
+  // ... 10+ lines
+})
 
-## Cross-References to Existing Schemas
+// After
+import { textPartSchema, type TextPart as GeneratedTextPart } from "@generated/validators/textPart"
 
-When a field references an existing type, use `$ref`:
-
-```json
-{
-  "attachments": {
-    "type": "array",
-    "items": { "$ref": "filePart.schema.json" }
-  }
-}
+export const TextPart = textPartSchema
+export type TextPart = GeneratedTextPart
 ```
 
-Note: FilePart schema may need to be created as part of message schemas (check if it exists).
+### 3. Updated Proto Doc
+
+Update `docs/proto/05-message.md`:
+- Status changed to ✅ Complete
+- Source of Truth section pointing to JSON Schemas
+- Protobuf messages matching JSON Schema structure
+- JSON Schema Cross-Reference tables
+- Verification summary
+
+### 4. All Verification Passing
+
+- [ ] `bun run generate:schemas` ✅
+- [ ] `bun run typecheck` ✅
+- [ ] `bun test` ✅ (544+ tests)
+- [ ] `bun run build` ✅ (11 platforms)
+- [ ] Step 4.2 verification tables created for ALL schemas
+- [ ] Step 5.3 verification tables created for ALL schemas
 
 ---
 
-**Start by reading `SCHEMA_DEVELOPMENT_PROCESS.md`, then read the TypeScript source at `message-v2.ts` lines 214-291.**
+## Lessons from Previous Session
+
+The following mistakes were made in the tool schema session. **Do not repeat them:**
+
+1. **Skipped verification steps** — Claimed "verified" without creating comparison tables
+2. **Worked from memory** — Did not re-read files before making claims
+3. **Read wrong prompt** — Read `NEXT_SESSION_PROMPT.md` from repo root instead of `docs/proto/`
+4. **Skipped build step** — Did not run `bun run build` before claiming completion
+5. **Marked complete prematurely** — Updated todo status before verification was done
+
+**The guardrails in SCHEMA_DEVELOPMENT_PROCESS.md exist because of these failures. Follow them.**
+
+---
+
+## Starting Point
+
+1. Read `docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md` in full
+2. Read the TypeScript source: `git show 21dc3c24d:packages/opencode/src/session/message-v2.ts`
+3. Start with simpler types first (TextPart, ReasoningPart) before complex ones (Part, User, Assistant)
+4. Create schemas incrementally, running `bun run generate:schemas` after each batch
+5. Do verification as you go, not at the end
+
+**Do not skip steps. Do not work from memory. Create explicit verification tables.**
