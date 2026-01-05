@@ -1,7 +1,7 @@
 # Protobuf Schema Documentation
 
-**Version:** 1.1.0  
-**Last Updated:** 2026-01-04
+**Version:** 1.2.0  
+**Last Updated:** 2026-01-05
 
 ---
 
@@ -26,7 +26,7 @@ These JSON Schema files are the authoritative specification. The protobuf defini
 | `modelInfo.schema.json` | `model.proto` | ✅ Complete |
 | `providerInfo.schema.json` | `provider.proto` | ✅ Complete |
 | `auth.schema.json` | `auth.proto` | ✅ Complete |
-| (none yet) | `session.proto` | ⏳ WIP |
+| `sessionInfo.schema.json` | `session.proto` | ✅ Complete |
 | (none yet) | `message.proto` | ⏳ WIP |
 | (none yet) | `tool.proto` | ⏳ WIP |
 | (none yet) | `agent.proto` | ⏳ WIP |
@@ -59,7 +59,7 @@ proto/
 | [01-model.md](./01-model.md) | Model metadata, capabilities, cost, limits | ✅ Complete |
 | [02-provider.md](./02-provider.md) | Provider management, SDK options | ✅ Complete |
 | [03-auth.md](./03-auth.md) | Authentication per provider | ⏳ WIP |
-| [04-session.md](./04-session.md) | Session/tab management | ⏳ WIP |
+| [04-session.md](./04-session.md) | Session/tab management | ✅ Complete |
 | [05-message.md](./05-message.md) | User/assistant messages | ⏳ WIP |
 | [06-tool.md](./06-tool.md) | Tool execution state | ⏳ WIP |
 | [07-agent.md](./07-agent.md) | Agent listing | ⏳ WIP |
@@ -173,6 +173,13 @@ fn main() {
 ---
 
 ## Version History
+
+### 1.2.0 (2026-01-05)
+
+- **Session schemas completed** (`sessionInfo.schema.json` and 9 related schemas)
+- Added JSON Schema for: `SessionInfo`, `SessionTime`, `SessionSummary`, `SessionShare`, `SessionRevert`, `FileDiff`, `PermissionRule`, `PermissionRuleset`, `PermissionAction`, `SessionList`
+- Updated `session.proto` to match JSON Schema structure
+- Added comprehensive cross-reference tables in `04-session.md`
 
 ### 1.1.0 (2026-01-04)
 

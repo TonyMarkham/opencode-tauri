@@ -77,11 +77,13 @@ For each new schema domain (auth, session, message, etc.):
 1. Read TypeScript source       → Understand the Zod types (THIS IS YOUR SOURCE)
 2. Write JSON Schema files      → Create schema/*.schema.json (TRANSLATE FROM TYPESCRIPT)
 3. Fresh Eyes Review (CRITICAL) → Compare schema to TypeScript field-by-field
-4. Run generator + tests        → bun run generate:schemas && bun run typecheck
-5. Update proto markdown        → docs/proto/XX-name.md (THE GOAL — reference new schemas)
+4. Generate and verify          → bun run generate:schemas (creates validators)
+5. Refactor TypeScript (NEW)    → Replace inline Zod with imports from @generated/validators
+6. Run typecheck + tests        → Verify refactored code works
+7. Update proto markdown        → docs/proto/XX-name.md (THE GOAL — reference new schemas)
 ```
 
-**Steps 1-4 are preparation. Step 5 is the deliverable.**
+**Steps 1-6 are preparation. Step 7 is the deliverable.**
 
 The tooling handles the rest.
 
@@ -296,7 +298,7 @@ bun run generate:schemas
 
 **Do not proceed until generated Zod matches original Zod.**
 
-### 4.3 Run Typecheck
+### 4.3 Run Typecheck (Before Refactoring)
 
 ```bash
 cd submodules/opencode
@@ -305,7 +307,96 @@ bun run typecheck
 
 All packages should pass. If typecheck fails, the generated types don't integrate correctly.
 
-### 4.4 Run Tests
+### 4.4 Refactor TypeScript Source to Use Generated Validators
+
+> **⚠️ CRITICAL STEP - DO NOT SKIP ⚠️**
+>
+> This is what makes JSON Schema the single source of truth. Without this step,
+> you have TWO sources of truth (inline Zod + JSON Schema) that will drift apart.
+
+**Example refactoring** (based on model/provider work in commit 7c7c8475f):
+
+**Before (inline Zod - 33 lines):**
+```typescript
+export namespace Auth {
+  export const Oauth = z.object({
+    type: z.literal("oauth"),
+    refresh: z.string(),
+    access: z.string(),
+    expires: z.number(),
+    enterpriseUrl: z.string().optional(),
+  }).meta({ ref: "OAuth" })
+
+  export const Api = z.object({
+    type: z.literal("api"),
+    key: z.string(),
+  }).meta({ ref: "ApiAuth" })
+
+  export const WellKnown = z.object({
+    type: z.literal("wellknown"),
+    key: z.string(),
+    token: z.string(),
+  }).meta({ ref: "WellKnownAuth" })
+
+  export const Info = z.discriminatedUnion("type", [Oauth, Api, WellKnown]).meta({ ref: "Auth" })
+  export type Info = z.infer<typeof Info>
+}
+```
+
+**After (using generated validators - 11 lines):**
+```typescript
+import { authSchema, type Auth } from "@generated/validators/auth"
+import { oauthSchema, type Oauth } from "@generated/validators/oauth"
+import { apiAuthSchema, type ApiAuth } from "@generated/validators/apiAuth"
+import { wellKnownAuthSchema, type WellKnownAuth } from "@generated/validators/wellKnownAuth"
+
+export namespace Auth {
+  // Generated from JSON Schema - see schema/oauth.schema.json
+  export const Oauth = oauthSchema
+  
+  // Generated from JSON Schema - see schema/apiAuth.schema.json
+  export const Api = apiAuthSchema
+  
+  // Generated from JSON Schema - see schema/wellKnownAuth.schema.json
+  export const WellKnown = wellKnownAuthSchema
+  
+  // Generated from JSON Schema - see schema/auth.schema.json
+  export const Info = authSchema
+  export type Info = Auth
+}
+```
+
+**Steps:**
+
+1. Add imports at top of file from `@generated/validators/<typeName>`
+2. Replace inline Zod definitions with references to generated schemas
+3. Keep export names the same (maintains backwards compatibility)
+4. Add comments referencing the JSON Schema source files
+5. Delete all inline Zod definitions
+
+**For each schema:**
+- Import both the schema validator AND the TypeScript type
+- Re-export the validator with the original export name
+- Re-export the type with the original type name
+
+### 4.5 Run Typecheck (After Refactoring)
+
+```bash
+cd submodules/opencode
+bun run typecheck
+```
+
+All packages should pass. This now validates that:
+- The generated validators can be imported correctly
+- The refactored code type-checks properly
+- No breaking changes were introduced
+
+**If typecheck fails after refactoring:**
+1. Check import paths are correct (`@generated/validators/<typeName>`)
+2. Verify export names match the original names
+3. Ensure TypeScript types are imported and re-exported
+
+### 4.6 Run Tests
 
 ```bash
 cd submodules/opencode/packages/opencode
@@ -314,7 +405,12 @@ bun test
 
 All 544+ tests should pass. Zero behavior change expected.
 
-### 4.5 Build
+**If tests fail after refactoring:**
+- The generated validators may not be functionally equivalent to the original Zod
+- Go back to Step 4.2 and compare more carefully
+- Check for subtle differences (discriminatedUnion vs union, optional fields, etc.)
+
+### 4.7 Build
 
 ```bash
 cd submodules/opencode/packages/opencode
@@ -512,7 +608,12 @@ Copy this checklist when starting a new schema:
 
 ### Validation
 - [ ] `bun run generate:schemas` passes
-- [ ] `bun run typecheck` passes
+- [ ] `bun run typecheck` passes (before refactoring)
+- [ ] Refactor TypeScript source to use generated validators
+- [ ] Delete inline Zod definitions
+- [ ] Import from `@generated/validators/*`
+- [ ] Maintain backwards compatibility (same export names)
+- [ ] `bun run typecheck` passes (after refactoring)
 - [ ] `bun test` passes (544+ tests)
 - [ ] `bun run build` passes (optional)
 
