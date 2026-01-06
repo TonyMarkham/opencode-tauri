@@ -1,4 +1,4 @@
-# Session Plan: OpenCode Tauri-Blazor Client
+# Session Plan v2: OpenCode Tauri-Blazor Client
 
 **Budget:** 100K tokens per session (hard limit)  
 **Philosophy:** Every session ends with something you can demo  

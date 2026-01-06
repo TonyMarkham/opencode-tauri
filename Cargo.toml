@@ -25,6 +25,10 @@ tauri = { version = "2.9.5" }
 tauri-build = { version = "2.5.3", features = [] }
 prost = { version = "0.14.1" }
 prost-build = { version = "0.14.1" }
+tokio-tungstenite = { version = "0.28.0" }
+futures-util = { version = "0.3.31" }
+uuid = { version = "1.19.0", features = ["v4"] }
+url = { version = "2.5.8" }
 
 models = { path = "models" }
 client-core = { path = "backend/client-core" }

@@ -1,0 +1,165 @@
+syntax = "proto3";
+package opencode;
+
+// ============================================
+// ENVELOPE (wraps all messages)
+// ============================================
+
+message ClientMessage {
+  uint64 request_id = 1;
+  
+  oneof payload {
+    // Auth
+    AuthHandshake auth_handshake = 10;
+    
+    // Sessions
+    ListSessionsRequest list_sessions = 20;
+    CreateSessionRequest create_session = 21;
+    DeleteSessionRequest delete_session = 22;
+    
+    // Agents
+    ListAgentsRequest list_agents = 30;
+    
+    // Providers
+    GetProviderStatusRequest get_provider_status = 40;
+    
+    // Auth operations
+    SetAuthRequest set_auth = 50;
+    GetAuthRequest get_auth = 51;
+  }
+}
+
+message ServerMessage {
+  uint64 request_id = 1;
+  
+  oneof payload {
+    // Auth
+    AuthHandshakeResponse auth_handshake_response = 10;
+    
+    // Sessions
+    SessionList session_list = 20;
+    SessionInfo session_info = 21;
+    
+    // Agents
+    AgentList agent_list = 30;
+    
+    // Providers
+    ProviderStatus provider_status = 40;
+    
+    // Auth
+    AuthInfo auth_info = 50;
+    
+    // Errors
+    ErrorResponse error = 100;
+    
+    // Streaming (Session 4B)
+    // ChatToken token = 200;
+    // ChatCompleted completed = 201;
+    // ToolCallEvent tool_call = 202;
+  }
+}
+
+// ============================================
+// AUTH HANDSHAKE
+// ============================================
+
+message AuthHandshake {
+  string token = 1;
+}
+
+message AuthHandshakeResponse {
+  bool success = 1;
+  optional string error = 2;
+}
+
+// ============================================
+// SESSIONS
+// ============================================
+
+message ListSessionsRequest {}
+
+message CreateSessionRequest {
+  optional string title = 1;
+}
+
+message DeleteSessionRequest {
+  string session_id = 1;
+}
+
+message SessionList {
+  repeated SessionInfo sessions = 1;
+}
+
+message SessionInfo {
+  string id = 1;
+  optional string title = 2;
+  int64 created_at = 3;
+  int64 updated_at = 4;
+}
+
+// ============================================
+// AGENTS
+// ============================================
+
+message ListAgentsRequest {}
+
+message AgentList {
+  repeated AgentInfo agents = 1;
+}
+
+message AgentInfo {
+  string name = 1;
+  optional string description = 2;
+  optional string mode = 3;
+  bool built_in = 4;
+  optional string color = 5;
+}
+
+// ============================================
+// PROVIDERS
+// ============================================
+
+message GetProviderStatusRequest {}
+
+message ProviderStatus {
+  repeated string connected = 1;
+}
+
+// ============================================
+// AUTH OPERATIONS
+// ============================================
+
+message SetAuthRequest {
+  string provider_id = 1;
+  AuthInfo auth = 2;
+}
+
+message GetAuthRequest {
+  string provider_id = 1;
+}
+
+message AuthInfo {
+  oneof auth_type {
+    ApiKeyAuth api_key = 1;
+    OAuthAuth oauth = 2;
+  }
+}
+
+message ApiKeyAuth {
+  string key = 1;
+}
+
+message OAuthAuth {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_at = 3;
+}
+
+// ============================================
+// ERRORS
+// ============================================
+
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+}

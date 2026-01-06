@@ -14,9 +14,17 @@ regex = { workspace = true }
 log = { workspace = true }
 backoff = { workspace = true }
 const_format = { workspace = true }
+prost = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
 
 models = { workspace = true }
 
 [[test]]
 name = "integration_tests"
 path = "integration_tests/mod.rs"
+
+[build-dependencies]
+prost-build = { workspace = true }

@@ -1,850 +1,569 @@
-# Session Plan - Feature-Based (FINAL)
+# Session Plan: OpenCode Tauri-Blazor Desktop Client
 
-**Status:** Ready for implementation  
-**Goal:** Replace abstract "backend/frontend" split with concrete user-facing features  
-**Based on:** Comprehensive audit of `submodules/opencode-egui/` reference implementation
-
----
-
-## IPC Architecture (ADR-0003)
-
-**Communication:** WebSocket + Protobuf (not gRPC)
-
-```
-Blazor WASM (C#)
-    ↓ System.Net.WebSockets.ClientWebSocket
-    ↓ Binary protobuf frames
-WebSocket (ws://127.0.0.1:PORT)
-    ↓ tokio-tungstenite + prost
-client-core (Rust)
-    ↓ reqwest HTTP
-OpenCode Server
-```
-
-**Why WebSocket instead of gRPC:**
-- Blazor WASM runs in browser sandbox (can't use native IPC)
-- Streaming required for LLM token delivery (Tauri invoke doesn't stream)
-- No JavaScript needed (`ClientWebSocket` is native C#)
-- Simpler than gRPC (no HTTP/2 framing overhead)
-
-**Key principles:**
-- Blazor is "dumb glass" - renders tokens, never interprets domain logic
-- One WebSocket = one session (open on start, close on exit)
-- Binary-only protocol (no JSON, no text frames)
-
-**See:** [ADR-0003: WebSocket + Protobuf IPC](docs/adr/0003-websocket-protobuf-ipc.md)
+**Goal:** Feature parity with egui reference implementation  
+**Reference:** `submodules/opencode-egui/` and `docs/EGUI_ARCHITECTURE.md`  
+**Token limit:** 120K per session (hard cap)
 
 ---
 
-## Philosophy
+## Naming Conventions
 
-Each session delivers a **demonstrable feature** that can be tested and shown to users.
+### Proto Message Prefixes
+- **`Ipc*`** - IPC messages (Blazor ↔ client-core WebSocket)
+  - `IpcClientMessage`, `IpcServerMessage`, `IpcAuthHandshake`, `IpcChatToken`, etc.
+- **`Oc*`** - OpenCode data models (mirroring OpenCode server types)
+  - `OcSession`, `OcMessage`, `OcAgent`, `OcProvider`, etc.
 
-**Good (concrete):**
-- Session 4.5: "Server Discovery + First Chat" ← Can demo: launch app, send message, see response
-- Session 5: "Multi-Tab Sessions + Agent Selection" ← Can demo: open multiple chats, switch agents
-- Session 6: "Tool Calls + Permission Dialogs" ← Can demo: see tool execution, approve permissions
+### Field/Variable Names
+- **`opencode_*`** - OpenCode server (the TypeScript AI server on ports 4008-4018)
+  - `opencode_url`, `opencode_port`, `opencode_client`, `OpencodeClient`
+- **`ipc_*`** - IPC server (the WebSocket server in client-core)
+  - `ipc_url`, `ipc_port`, `ipc_server`, `IpcServer`, `IpcClient`
 
----
-
-## Feature Audit Summary
-
-Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
-
-### MVP Features (Must Have)
-1. ✅ Server discovery + spawn
-2. ✅ Single session chat (send message, receive response)
-3. ✅ SSE event streaming (message updates)
-4. ✅ Basic message display (text, role, bubbles)
-5. ✅ Tool call visualization (collapsible blocks)
-6. ✅ Permission approval dialogs
-7. ✅ Agent selection
-8. ✅ Model selection
-
-### Core Features (Should Have)
-9. ✅ Multi-tab sessions
-10. ✅ Markdown rendering
-11. ✅ Reasoning display (collapsible)
-12. ✅ Token counts
-13. ✅ Message cancellation
-14. ✅ Auth sync (API keys to server)
-
-### Enhanced Features (Feature Parity)
-15. ✅ OAuth mode toggle (Anthropic)
-16. ✅ Settings panel
-17. ✅ Config persistence
-18. ✅ Tab rename
-19. ✅ Clipboard image paste
-20. ✅ OAuth countdown timer
-21. ✅ Model discovery UI
-22. ✅ Audio/STT (Session 9)
-
-**Goal:** Full feature parity with egui reference implementation
+**Never use ambiguous names like `server_url`, `port`, `client`, or `base_url`.**
 
 ---
 
-## Session Breakdown
+## Completed Sessions (1-4)
 
-### Session 4A: "WebSocket + Proto Foundation" ⭐⭐⭐
+| Session | Deliverable | Status |
+|---------|-------------|--------|
+| 1 | Rust client-core (discovery, spawn, health) | DONE |
+| 2 | Tauri app shell + server commands | DONE |
+| 3 | Blazor scaffold + server status UI | DONE |
+| 4 | Proto documentation (72+ JSON schemas) | DONE |
 
-**User-facing goal:** None - this is pure infrastructure.
-
-**What you build:**
-- WebSocket server in client-core (Rust)
-- Protobuf message envelope (ClientMessage/ServerMessage)
-- Core proto messages (session, agent, provider, auth)
-- C# WebSocket client service
-- Smoke test page
-
-**Technical scope:**
-1. **WebSocket Server** (client-core):
-   - `tokio-tungstenite` for async WebSocket
-   - Bind to `127.0.0.1:PORT` only (security)
-   - Auth token handshake on connect
-   - Binary frames only (protobuf)
-   
-2. **Proto Messages** (from `docs/proto/*.md`):
-   - `ClientMessage` envelope with `request_id` + `oneof payload`
-   - `ServerMessage` envelope with `request_id` + `oneof payload`
-   - Session operations: `ListSessions`, `CreateSession`, `DeleteSession`
-   - Agent operations: `ListAgents`
-   - Provider operations: `GetProviderStatus`
-   - Auth operations: `SetAuth`, `GetAuth`
-   
-3. **Rust Message Handlers** (HTTP bridges):
-   - `handle_list_sessions` → `GET /session`
-   - `handle_create_session` → `POST /session`
-   - `handle_list_agents` → `GET /agent`
-   - `handle_get_provider_status` → `GET /provider`
-   
-4. **C# WebSocket Client**:
-   - `WebSocketService` - connection management, send/receive
-   - `IOpenCodeClient` - typed wrapper for operations
-   - Protobuf serialization via `Google.Protobuf`
-   - Configure DI in `Program.cs`
-
-**Token estimate:** ~80K
-
-**Success criteria:**
-- [ ] WebSocket server starts on app launch
-- [ ] C# client connects via `ClientWebSocket`
-- [ ] Auth handshake succeeds
-- [ ] Can list sessions (round-trip works)
-- [ ] Can list agents (round-trip works)
-- [ ] Smoke test shows ✅ for all operations
+**Current state:** App launches, discovers/spawns server, shows status page.
 
 ---
 
-### Session 4B: "Streaming + Messages" ⭐⭐⭐
+## Phase 1: Communication Foundation (Sessions 5-8)
 
-**User-facing goal:** None - this is pure infrastructure.
+### Session 5: IPC Server - Echo
+**Demo:** Connect with wscat, send text, receive echo.
 
-**What you build:**
-- Bidirectional streaming over WebSocket
-- Message operations (send, receive, cancel)
-- SSE → WebSocket event translation
-- Tool call proto messages
+- Create `backend/client-core/src/ipc/server.rs`
+- Bind to `127.0.0.1:{ipc_port}`
+- Accept connections
+- Echo received text back
+- Plain text, no protobuf yet
 
-**Technical scope:**
-1. **Streaming Proto Messages**:
-   - `ChatToken` - Single token from LLM
-   - `ChatCompleted` - Stream finished
-   - `ChatError` - Error during streaming
-   - `CancelRequest` - Cancel active stream
-   - `ToolCallEvent` - Tool execution update
-   
-2. **Message Operations**:
-   - `SendMessageRequest` → `POST /session/{id}/message`
-   - `GetMessagesRequest` → `GET /session/{id}/message`
-   - `AbortSessionRequest` → `POST /session/{id}/abort`
-   
-3. **SSE → WebSocket Bridge** (client-core):
-   - Subscribe to OpenCode SSE: `GET /event`
-   - Parse SSE events (message.updated, message.part.updated, etc.)
-   - Convert to protobuf `ServerMessage`
-   - Push to WebSocket as binary frames
-   - Handle reconnection on SSE disconnect
-   
-4. **C# Event Handling**:
-   - `EventStreamService` - Background service
-   - Receives `ServerMessage` from WebSocket
-   - Dispatches to Fluxor store
-   - Token-by-token UI updates
-
-**Token estimate:** ~70K
-
-**Success criteria:**
-- [ ] Can send message and receive streaming tokens
-- [ ] Tokens appear one-by-one (not batched)
-- [ ] Can cancel active stream
-- [ ] Tool call events received
-- [ ] SSE reconnection works
-
-**Why this matters:**
-Completes the communication layer. Sessions 5+ just wire UI to these messages!
+**Success:** `wscat -c ws://127.0.0.1:{ipc_port}` → send "hello" → receive "hello"
 
 ---
 
-### Session 5: "Server Discovery + Basic Chat" ⭐⭐⭐
+### Session 6: IPC Server - Auth + Protobuf
+**Demo:** Auth handshake works, protobuf messages parse.
 
-**User-facing goal:** Launch app, auto-discover server (or spawn), send a message, see a response.
+- **Apply naming conventions:** Rename existing protos to `Ipc*` and `Oc*` prefixes
+- **Apply naming conventions:** Rename fields to `ipc_*` and `opencode_*`
+- Add auth token validation (first message must be `IpcAuthHandshake`)
+- Switch to binary frames (protobuf)
+- Parse `IpcClientMessage` envelope
+- Send `IpcServerMessage` responses
+- Reject invalid auth
 
-**What you can demo:**
-- App launches
-- Server discovered/spawned automatically  
-- Type message in input box
-- Click send (or Cmd+Enter)
-- See assistant response appear (text only, streaming)
-- See basic tool execution (no permission yet)
-
-**Technical scope:**
-1. **Use WebSocket services from Session 4:**
-   - Session operations (already implemented!)
-   - Message operations (already implemented!)
-   - Event streaming (already implemented!)
-
-2. **Blazor Components**:
-   - `MainLayout.razor` - App shell with status bar
-   - `ChatView.razor` - Single tab, message list, input box
-   - `MessageBubble.razor` - User/assistant message display (text only, no markdown)
-   - `ToolCallBlock.razor` - Basic collapsible tool display (no permissions yet)
-
-3. **State Management** (Fluxor):
-   - `AppState` - Server info, WebSocket status, single tab state
-   - `TabState` - Messages, input, session ID
-   - `DisplayMessage` - Message data (role, text, tool_calls)
-   - `ToolCall` - Tool execution data (id, name, status, input, output)
-
-4. **Server Discovery** (existing Tauri commands):
-   - Use existing `discover_server` / `spawn_server` commands
-   - Get WebSocket port from Tauri (one-time call)
-   - Connect WebSocket on startup
-
-5. **Event Handling** (WebSocket streaming):
-   - Receive `ServerMessage` from WebSocket
-   - Route by payload type: `ChatToken`, `ToolCallEvent`, etc.
-   - Update state via Fluxor actions
-   - Tokens append to message text incrementally
-
-**Out of scope:**
-- Multi-tab (Session 5)
-- Permissions (Session 6)
-- Markdown rendering (Session 8)
-- Settings/config (Session 8)
-
-**Token estimate:** ~120K
-
-**Success criteria:**
-- [ ] App auto-discovers server on launch
-- [ ] Can create session and send text message
-- [ ] Messages appear in chat (user + assistant)
-- [ ] Tool calls display with status (collapsed by default)
-- [ ] Streaming updates work (text appears incrementally)
+**Success:** Auth handshake succeeds, invalid token rejected
 
 ---
 
-### Session 6: "Multi-Tab + Agent Selection" ⭐⭐
+### Session 7: IPC Server - Session Handlers
+**Demo:** Can list/create/delete sessions via IPC.
 
-**User-facing goal:** Open multiple chat tabs, switch between them, select different agent per tab.
+- Implement `IpcListSessions` handler → `GET {opencode_url}/session`
+- Implement `IpcCreateSession` handler → `POST {opencode_url}/session`
+- Implement `IpcDeleteSession` handler → `DELETE {opencode_url}/session/{id}`
+- HTTP client in client-core for OpenCode server calls (`OpencodeClient`)
 
-**What you can demo:**
-- Click "+" to create new tab
-- Switch between tabs (tab bar)
-- Close tab with "X" button
-- Each tab has independent chat history
-- Select agent from sidebar (per tab)
-- Agent name shown in footer
-
-**Technical scope:**
-1. **Tab Management**:
-   - `TabBar.razor` - Tab list with +/X buttons
-   - Multiple `TabState` in `AppState.Tabs`
-   - Active tab index tracking
-   - Session create/delete on tab open/close
-
-2. **Agent System**:
-   - `AgentPane.razor` - Left sidebar with agent list
-   - Fetch agents via WebSocket `ListAgents` (already implemented!)
-   - Filter by mode (hide subagents by default)
-   - Per-tab agent selection
-   - Send agent with message: `agent: "build"`
-
-3. **State Updates**:
-   - `CreateTabAction` / `CloseTabAction` / `SwitchTabAction`
-   - `SelectAgentAction(tabId, agentName)`
-   - Route events to correct tab by `sessionID`
-
-**Out of scope:**
-- Model selection (Session 7)
-- Permissions (Session 7)
-- Tab rename (Session 9)
-
-**Token estimate:** ~100K
-
-**Success criteria:**
-- [ ] Can create/close/switch tabs
-- [ ] Each tab has unique session ID
-- [ ] Agent pane shows list of agents
-- [ ] Can select agent per tab
-- [ ] Agent sent with message (verify in server logs)
+**Success:** Create session via wscat, verify in OpenCode server
 
 ---
 
-### Session 7: "Tool Calls + Permissions" ⭐⭐⭐
+### Session 8: C# IPC Client
+**Demo:** Blazor connects to IPC server, lists sessions in UI.
 
-**User-facing goal:** See tool execution in real-time, approve permission requests.
+- Create `IpcClientService.cs` using `System.Net.WebSockets.ClientWebSocket`
+- `IpcAuthHandshake` on connect
+- Background receive loop
+- Protobuf serialization (`Google.Protobuf`)
+- Simple test page showing session list
 
-**What you can demo:**
-- Send message that triggers tool use (e.g., "list files")
-- Watch tool call status update (pending → running → success)
-- See tool logs streaming in
-- Permission dialog appears for restricted tools
-- Click "Allow Once" / "Reject" / "Always Allow"
-- See tool output after permission granted
-
-**Technical scope:**
-1. **Enhanced Tool Display**:
-   - `ToolCallBlock.razor` - Full tool visualization
-     - Header: status icon + name + command summary + duration
-     - Body (expanded): COMMAND, INPUT, OUTPUT, ERROR, LOGS sections
-     - Auto-expand if: running OR has_permission OR has_error
-   - Smart command summary (extract `command`, `filePath`, `url` from input)
-   - Scrollable output/logs sections
-
-2. **Permission System**:
-   - `PermissionDialog.razor` - Inline in tool block
-   - Listen for `permission.updated` events
-   - Store in `AppState.PendingPermissions`
-   - Send `POST /session/{id}/permissions/{perm_id}` with response
-   - Remove after response
-   - **Auto-reject logic** (replicate egui complexity):
-     ```csharp
-     bool is_cancelled = 
-         tab.CancelledMessages.Contains(perm.MessageId) ||
-         tab.CancelledCalls.Contains(perm.CallId) ||
-         perm.Time.Created <= tab.CancelledAfter ||
-         perm.Time.Created <= tab.LastSendAt ||
-         tab.SuppressIncoming;
-     ```
-
-3. **Message Cancellation**:
-   - "Stop" button (shown when `tab.ActiveAssistant != null`)
-   - Cancel active message → mark tools as "cancelled"
-   - Send `POST /session/{id}/abort` (twice, 200ms apart)
-   - Set `tab.CancelledAfter = now()` to block future events
-
-4. **Event Handling** (Tool Updates):
-   - `message.part.updated` (type=tool) → Update/create ToolCall
-   - Incremental updates: status, logs, output, error
-   - Find tool by `id` OR `call_id` (need dual index)
-
-**Out of scope:**
-- Markdown rendering (Session 9)
-- Model selection (Session 8)
-
-**Token estimate:** ~110K
-
-**Success criteria:**
-- [ ] Tool calls show in collapsed blocks
-- [ ] Click to expand → see full details
-- [ ] Auto-expand when permission needed
-- [ ] Permission dialog shows inline
-- [ ] Can approve/reject permissions
-- [ ] Tool output appears after approval
-- [ ] Can cancel active response
+**Success:** Blazor UI shows list of sessions from OpenCode server
 
 ---
 
-### Session 8: "Model Selection + Provider Status" ⭐⭐
+## Phase 2: Config & Auth (Sessions 9-12)
 
-**User-facing goal:** Change model/provider per session, see provider connection status.
+**Why this phase comes before chat:** You can't send a message without a model selected and auth configured.
 
-**What you can demo:**
-- Model picker dropdown in footer (shows providers + models)
-- Select different model per tab
-- See OAuth subscription indicator (🟢)
-- Switch auth mode (OAuth ↔ API key) for Anthropic
-- See OAuth expiry countdown
+### Session 9: Config Loading
+**Demo:** App loads settings from disk on startup.
 
-**Technical scope:**
-1. **Model Management**:
-   - `ModelSelector.razor` - Dropdown in footer
-   - Curated models list (hardcoded or from config)
-   - Per-tab model selection
-   - Send model with message:
-     ```json
-     { "model": { "providerID": "anthropic", "modelID": "claude-3-5-sonnet-20241022" } }
-     ```
-   - Display current model in footer
+- Create `AppConfig` class (mirrors egui's config.json)
+- Create `ModelsConfig` class (mirrors egui's models.toml)
+- Load on startup, save on change
+- Platform-specific paths (use Tauri app data directory)
 
-2. **Auth Sync**:
-   - `AuthSyncService` - Background service
-   - Load `.env` file from app directory
-   - Extract `{PROVIDER}_API_KEY` variables
-   - Send to server: `PUT /auth/{provider}` with `{ "type": "api", "key": "..." }`
-   - Display sync status in settings
-
-3. **OAuth Mode Toggle** (Anthropic only):
-   - Checkbox in footer: ☐ API Key / ☑ Subscription
-   - **Switch to OAuth**:
-     1. Read OAuth tokens from `.env` cache
-     2. `PUT /auth/anthropic` with `{ "type": "oauth", "access": "...", "refresh": "...", "expires": ... }`
-     3. `POST /instance/dispose` to reload server
-   - **Switch to API Key**:
-     1. Read `ANTHROPIC_API_KEY` from `.env`
-     2. `PUT /auth/anthropic` with `{ "type": "api", "key": "..." }`
-     3. `POST /instance/dispose`
-
-4. **Provider Status**:
-   - Fetch `GET /provider` → `{ "connected": ["anthropic", "openai"] }`
-   - Show 🟢 indicator for OAuth providers in model selector
-   - OAuth expiry countdown (⏱ 23h 59m remaining)
-   - Color-coded: 🟢 green (>5m), 🟡 yellow (0-5m), 🔴 red (expired)
-
-**Out of scope:**
-- Model discovery (use hardcoded list for MVP)
-
-**Token estimate:** ~90K
-
-**Success criteria:**
-- [ ] Model selector shows curated models
-- [ ] Can select model per tab
-- [ ] Model sent with message (verify in server logs)
-- [ ] Auth sync runs on startup
-- [ ] Can toggle OAuth mode for Anthropic
-- [ ] OAuth expiry countdown shows when enabled
+**Success:** Change setting, restart app, setting persists
 
 ---
 
-### Session 9: "Markdown + Full UX Parity" ⭐⭐⭐
+### Session 10: Settings Panel - Server Section
+**Demo:** Settings modal opens, shows server status.
 
-**User-facing goal:** Beautiful message rendering + complete egui feature parity.
+- Settings button in footer
+- Modal dialog with Server section
+- Display: base URL, PID, owned status
+- Buttons: Reconnect, Start, Stop
 
-**What you can demo:**
-- Markdown in messages (code blocks, lists, headers)
-- Syntax highlighting in code blocks
-- Reasoning sections (collapsible)
-- Token counts displayed below messages
-- **Tab rename** (right-click → rename)
-- **Clipboard image paste** (📋 button)
-- OAuth countdown timer (⏱ 23h 59m)
-- Settings panel (server, UI, models)
-- Config persistence across restarts
-
-**Technical scope:**
-1. **Markdown Rendering**:
-   - Use **Markdig** library (C# markdown parser)
-   - Custom Blazor components for rendering:
-     - `MarkdownText.razor` - Render markdown to HTML
-     - `CodeBlock.razor` - Syntax highlighting (use **Highlight.js**)
-   - Normalize code fences (ensure `\n` before ` ``` `)
-
-2. **Reasoning Display**:
-   - `ReasoningSection.razor` - Collapsible section
-   - Default open if message text is empty
-   - Auto-collapse when message finishes
-
-3. **Token Counts**:
-   - Display below message text
-   - Format: `tokens: in 1234, out 567, reason 89`
-   - Small, gray text
-
-4. **Settings Panel**:
-   - `SettingsDialog.razor` - Modal dialog
-   - **Server Preferences**:
-     - Base URL override
-     - Directory override
-     - Auto-start toggle
-     - Server status (URL, PID, owned)
-     - Reconnect / Start / Stop buttons
-   - **UI Preferences**:
-     - Font size (small/standard/large)
-     - Chat density (compact/normal/comfortable)
-     - Show subagents toggle
-   - **Models Preferences**:
-     - Curated models list
-     - Default model selector
-
-5. **Config Persistence**:
-   - Save config to Tauri app data directory
-   - Auto-load on startup
-   - Structure:
-     ```json
-     {
-       "server": {
-         "lastBaseUrl": "http://localhost:4008",
-         "autoStart": true,
-         "directoryOverride": null
-       },
-       "ui": {
-         "fontSize": "standard",
-         "chatDensity": "normal"
-       },
-       "models": {
-         "defaultModel": "anthropic/claude-3-5-sonnet-20241022",
-         "curatedModels": [...]
-       }
-     }
-     ```
-
-6. **Tab Rename**:
-   - Right-click context menu on tab
-   - Inline text edit with focus + select all
-   - Enter/Tab to confirm, Escape to cancel
-
-7. **Clipboard Image Paste**:
-   - "📋 Paste Image" button in input area
-   - Tauri clipboard API for cross-platform access
-   - PNG encoding + base64 data URI
-   - Preview list with remove buttons
-
-8. **OAuth Countdown Timer**:
-   - Footer display: `⏱ 23h 59m remaining`
-   - Color coding: 🟢 >5m, 🟡 0-5m, 🔴 expired
-   - Update every second when enabled
-   - "🔄 Refresh" button
-
-**Token estimate:** ~100K (+20K for full UX parity)
-
-**Success criteria:**
-- [ ] Markdown renders correctly (lists, code, headers)
-- [ ] Code blocks have syntax highlighting
-- [ ] Reasoning sections collapse/expand
-- [ ] Token counts displayed
-- [ ] **Tab rename works** (right-click, inline edit)
-- [ ] **Clipboard paste works** (images appear in attachments)
-- [ ] **OAuth timer displays** (color-coded countdown)
-- [ ] Settings panel opens/closes
-- [ ] Config persists across app restarts
+**Success:** Can see server status in settings
 
 ---
 
-## Total Token Budget
+### Session 11: Settings Panel - Models Section  
+**Demo:** Can see and select default model.
 
-| Session | Feature | Estimate | Running Total |
-|---------|---------|----------|---------------|
-| 4A | **WebSocket + Proto Foundation** | **80K** | 80K |
-| 4B | **Streaming + Messages** | **70K** | 150K |
-| 5 | Server + Basic Chat | 120K | 270K |
-| 6 | Multi-Tab + Agents | 100K | 370K |
-| 7 | Tool Calls + Permissions | 110K | 480K |
-| 8 | Model Selection + Auth | 90K | 570K |
-| 9 | Markdown + **Full UX Parity** | 100K | 670K |
-| 10 | Audio/STT | 80K | **750K** |
+- Models section in settings
+- Curated models list display
+- Default model dropdown
+- Model selector in footer (per-tab selection)
 
-**Full Feature Parity: ~750K tokens**
-
-**Goal:** Match egui reference implementation feature-for-feature
-
-**Why Sessions 4A & 4B?**
-- 4A: WebSocket server + core proto messages (80K)
-- 4B: Streaming + SSE bridge (70K)
-- Sessions 5-10: Just UI wiring to existing WebSocket services
+**Success:** Select model from dropdown, verify it's sent with message
 
 ---
 
-### Session 10: "Audio/STT Integration" ⭐⭐
+### Session 12: Auth Sync
+**Demo:** API keys sync to OpenCode server on connect.
 
-**User-facing goal:** Hands-free input via push-to-talk audio transcription.
+- Read `.env` file for `*_API_KEY` variables
+- On OpenCode server connect: `PUT {opencode_url}/auth/{provider}` for each key
+- Display sync status in settings (success/failure per provider)
+- Skip Anthropic if OAuth detected
 
-**What you can demo:**
-- Hold AltRight (or configured key) to record
-- Release to transcribe
-- Transcribed text appears in input box
-- Visual feedback ("🎙 Recording...")
-- Configurable hotkey in settings
-
-**Technical scope:**
-1. **Tauri Audio Plugin**:
-   - Cross-platform audio capture (Windows/macOS/Linux)
-   - Real-time audio streaming to buffer
-
-2. **Whisper Integration**:
-   - Download `ggml-base.en.bin` (74MB) on first use
-   - Load model in background thread
-   - Whisper.cpp or whisper-rs bindings for C#
-   - Inference on recorded audio
-
-3. **Audio Processing**:
-   - Resample to 16kHz mono (Whisper requirement)
-   - VAD (Voice Activity Detection) for cleaner transcripts
-   - Background processing (don't block UI)
-
-4. **UI Components**:
-   - Push-to-talk state machine (Idle → Recording → Processing → Done)
-   - Recording indicator in input area
-   - Audio settings in Settings panel:
-     - Push-to-talk key configuration
-     - Whisper model path
-     - Auto-download model toggle
-
-5. **Config**:
-   ```json
-   {
-     "audio": {
-       "pushToTalkKey": "AltRight",
-       "whisperModelPath": null,  // null = auto-download
-       "autoDownloadModel": true
-     }
-   }
-   ```
-
-**Token estimate:** ~80K
-
-**Success criteria:**
-- [ ] Push-to-talk works (hold key, record, release, transcribe)
-- [ ] Whisper model auto-downloads on first use
-- [ ] Transcription appears in input box
-- [ ] Recording indicator shows during capture
-- [ ] Hotkey configurable in settings
-- [ ] Works on all platforms (Windows, macOS, Linux)
-
-**Why include audio:**
-- ✅ Egui has it - we should have parity
-- ✅ Accessibility feature (mobility-impaired users)
-- ✅ Productivity boost (faster than typing)
-- ✅ Tauri makes it achievable (audio plugins exist)
-
-**Required for full feature parity with egui.**
+**Success:** See "✓ Synced: openai, anthropic" in settings
 
 ---
 
-## Implementation Notes
+## Phase 3: Basic Chat (Sessions 13-16)
 
-### State Management Architecture
+### Session 13: Chat UI Shell
+**Demo:** Input box and message list visible.
 
-Use **Fluxor** (Redux-like state management for Blazor):
+- Chat page with input area
+- Send button (disabled when no session)
+- Message list (empty initially)
+- Create session on page load
+- Display session ID in footer
 
-```csharp
-// State
-public record AppState
-{
-    public ServerInfo? Server { get; init; }
-    public List<TabState> Tabs { get; init; } = new();
-    public int ActiveTabIndex { get; init; }
-    public List<AgentInfo> Agents { get; init; } = new();
-    public List<PermissionInfo> PendingPermissions { get; init; } = new();
-}
-
-public record TabState
-{
-    public string TabId { get; init; }
-    public string Title { get; init; }
-    public string? SessionId { get; init; }
-    public List<DisplayMessage> Messages { get; init; } = new();
-    public string Input { get; init; } = "";
-    public string? SelectedAgent { get; init; }
-    public ModelSelection? SelectedModel { get; init; }
-    public string? ActiveAssistant { get; init; }
-    public List<string> CancelledMessages { get; init; } = new();
-    public List<string> CancelledCalls { get; init; } = new();
-    public long? CancelledAfter { get; init; }
-    public bool SuppressIncoming { get; init; }
-}
-
-// Actions
-public record AddMessageAction(string TabId, DisplayMessage Message);
-public record UpdateMessageTextAction(string TabId, string MessageId, string Text);
-public record UpdateToolCallAction(string TabId, string MessageId, ToolCall ToolCall);
-public record AddPermissionAction(PermissionInfo Permission);
-public record RemovePermissionAction(string PermissionId);
-
-// Reducers
-public class AppReducers
-{
-    [ReducerMethod]
-    public static AppState ReduceAddMessage(AppState state, AddMessageAction action)
-    {
-        var tabIndex = state.Tabs.FindIndex(t => t.TabId == action.TabId);
-        if (tabIndex == -1) return state;
-        
-        var updatedTab = state.Tabs[tabIndex] with
-        {
-            Messages = state.Tabs[tabIndex].Messages.Append(action.Message).ToList()
-        };
-        
-        return state with
-        {
-            Tabs = state.Tabs.Select((t, i) => i == tabIndex ? updatedTab : t).ToList()
-        };
-    }
-}
-```
-
-### Event Streaming Pattern (WebSocket)
-
-```csharp
-public class WebSocketEventService : BackgroundService
-{
-    private readonly IDispatcher _dispatcher;
-    private readonly WebSocketService _webSocket;
-    
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        // WebSocket already connected by app startup
-        _webSocket.OnMessageReceived += HandleMessage;
-        
-        // Keep alive until cancelled
-        await Task.Delay(Timeout.Infinite, stoppingToken);
-    }
-    
-    private void HandleMessage(ServerMessage msg)
-    {
-        // Route by payload type (protobuf oneof)
-        switch (msg.PayloadCase)
-        {
-            case ServerMessage.PayloadOneofCase.Token:
-                _dispatcher.Dispatch(new TokenReceivedAction(msg.RequestId, msg.Token));
-                break;
-            case ServerMessage.PayloadOneofCase.Completed:
-                _dispatcher.Dispatch(new StreamCompletedAction(msg.RequestId));
-                break;
-            case ServerMessage.PayloadOneofCase.ToolCall:
-                _dispatcher.Dispatch(new ToolCallUpdatedAction(msg.ToolCall));
-                break;
-            case ServerMessage.PayloadOneofCase.Error:
-                _dispatcher.Dispatch(new ErrorReceivedAction(msg.RequestId, msg.Error));
-                break;
-        }
-    }
-}
-```
-
-### Tool Call Updates (Efficient Lookup)
-
-```csharp
-// Use dual index for fast lookup by ID or CallID
-public class ToolCallIndex
-{
-    private readonly Dictionary<string, ToolCall> _byId = new();
-    private readonly Dictionary<string, ToolCall> _byCallId = new();
-    
-    public void AddOrUpdate(ToolCall tool)
-    {
-        _byId[tool.Id] = tool;
-        if (tool.CallId != null)
-            _byCallId[tool.CallId] = tool;
-    }
-    
-    public ToolCall? Find(string? id, string? callId)
-    {
-        if (id != null && _byId.TryGetValue(id, out var tool))
-            return tool;
-        if (callId != null && _byCallId.TryGetValue(callId, out tool))
-            return tool;
-        return null;
-    }
-}
-```
-
-### WebSocket Client Service
-
-```csharp
-public class WebSocketService : IAsyncDisposable
-{
-    private readonly ClientWebSocket _socket = new();
-    private ulong _nextRequestId = 1;
-    
-    public event Action<ServerMessage>? OnMessageReceived;
-    
-    public async Task ConnectAsync(string url, string authToken)
-    {
-        await _socket.ConnectAsync(new Uri(url), CancellationToken.None);
-        
-        // Send auth handshake
-        var handshake = new ClientMessage 
-        { 
-            RequestId = _nextRequestId++,
-            Auth = new AuthHandshake { Token = authToken }
-        };
-        await SendAsync(handshake);
-        
-        // Start receive loop
-        _ = ReceiveLoopAsync();
-    }
-    
-    public async Task<ulong> SendAsync(ClientMessage message)
-    {
-        message.RequestId = _nextRequestId++;
-        var bytes = message.ToByteArray();
-        await _socket.SendAsync(bytes, WebSocketMessageType.Binary, true, CancellationToken.None);
-        return message.RequestId;
-    }
-    
-    private async Task ReceiveLoopAsync()
-    {
-        var buffer = new byte[8192];
-        while (_socket.State == WebSocketState.Open)
-        {
-            var result = await _socket.ReceiveAsync(buffer, CancellationToken.None);
-            if (result.MessageType == WebSocketMessageType.Binary)
-            {
-                var msg = ServerMessage.Parser.ParseFrom(buffer, 0, result.Count);
-                OnMessageReceived?.Invoke(msg);
-            }
-        }
-    }
-    
-    public async ValueTask DisposeAsync()
-    {
-        await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
-        _socket.Dispose();
-    }
-}
-```
+**Success:** Page loads, session created, input box visible
 
 ---
 
-## Deferred Features (Post-MVP)
+### Session 14: Send Message - Non-Streaming
+**Demo:** Send message, see complete response.
 
-### Audio/STT ❌
-**Why defer**: Very complex
-- Requires Whisper model (74MB binary)
-- Platform-specific audio capture
-- Resampling to 16kHz mono
-- Local ML inference (heavy CPU/GPU)
+- `IpcSendMessage` proto message
+- client-core forwards to `POST {opencode_url}/session/{id}/message`
+- Wait for response, display in message list
+- User bubble (right), assistant bubble (left)
+- Include model and agent in request
 
-**Alternative**: Text input only for MVP
-
----
-
-### Model Discovery ❌
-**Why defer**: Requires provider API clients
-- Need API client for each provider
-- Dynamic model fetching from provider APIs
-- Search/filter UI
-
-**Alternative**: Hardcoded curated models list in config
+**Success:** Send "hello" → see Claude's response
 
 ---
 
-### Clipboard Image Paste ❌
-**Why defer**: Platform-specific, minor feature
-- Requires Tauri plugin
-- Platform-specific clipboard access
-- Image encoding
+### Session 15: SSE Subscription
+**Demo:** App receives real-time events from OpenCode server.
 
-**Alternative**: Text-only for MVP
+- Subscribe to `GET {opencode_url}/global/event` in client-core
+- Parse SSE events
+- Forward to IPC as `IpcServerMessage`
+- Log events in Blazor console
 
----
-
-### Tab Rename ❌
-**Why defer**: Minor UX polish
-- Context menu
-- Inline edit
-- Keyboard shortcuts
-
-**Alternative**: Use session ID as tab title for MVP
+**Success:** Send message, see SSE events logged
 
 ---
 
-## Next Steps
+### Session 16: Streaming Display
+**Demo:** Response appears word-by-word.
 
-1. ✅ **Review this plan** - Does it match your vision?
-2. ✅ **Finalize Session 4.5 scope** - Ready to start implementation?
-3. ✅ **Create NEXT_SESSION_PROMPT.md** - Detailed instructions for Session 4.5
-4. ⏳ **Start Session 4.5** - Implement server discovery + basic chat
+- `IpcChatToken` proto message
+- Update message text incrementally
+- Show "Thinking..." spinner while waiting
+- Clear spinner when text arrives
+
+**Success:** Response streams visibly
 
 ---
 
-**This plan is ready for implementation. Proceed to Session 4.5!**
+## Phase 4: Agents (Sessions 17-19)
+
+### Session 17: Agent Fetch + List
+**Demo:** Agent pane shows list of agents.
+
+- Fetch agents on OpenCode server connect (`GET {opencode_url}/agent`)
+- Left sidebar pane (collapsible)
+- Display agent name, color dot, badges
+- Filter out subagents by default
+
+**Success:** See agent list in sidebar
+
+---
+
+### Session 18: Agent Selection
+**Demo:** Select agent, verify it's sent with message.
+
+- Click agent to select
+- Per-tab agent selection
+- Show selected agent in footer
+- Include agent in `IpcSendMessage` request
+
+**Success:** Select "expert-developer", send message, verify in OpenCode server logs
+
+---
+
+### Session 19: Agent Filtering
+**Demo:** Toggle shows/hides subagents.
+
+- "Show subagents" toggle in settings
+- Re-filter list when toggled
+- Reset invalid selections to default
+
+**Success:** Toggle on → see subagents, toggle off → hidden
+
+---
+
+## Phase 5: Tools & Permissions (Sessions 20-24)
+
+### Session 20: Tool Call Display - Basic
+**Demo:** See tool calls in chat.
+
+- `IpcToolCallEvent` proto message
+- Tool block component (collapsible)
+- Show: status icon, name, command summary
+- Collapsed by default
+
+**Success:** Ask "list files", see tool block appear
+
+---
+
+### Session 21: Tool Call Display - Details
+**Demo:** Expand tool to see full details.
+
+- Expanded view: COMMAND, INPUT, OUTPUT, ERROR, LOGS
+- Scrollable output section
+- Duration display
+- Auto-expand when running or error
+
+**Success:** Expand tool, see full input/output
+
+---
+
+### Session 22: Permission Dialog
+**Demo:** Permission request appears in tool block.
+
+- `permission.updated` event handling
+- Red warning box in tool header
+- Buttons: Reject, Allow Once, Always Allow
+- Send response to server
+
+**Success:** Tool triggers permission, can approve
+
+---
+
+### Session 23: Permission Auto-Reject
+**Demo:** Cancelled messages don't show permission dialogs.
+
+- Track cancelled_messages, cancelled_calls, cancelled_after
+- Auto-reject permissions for cancelled work
+- 5-condition filter logic (see EGUI_ARCHITECTURE.md)
+
+**Success:** Cancel response, no stale permission dialogs
+
+---
+
+### Session 24: Message Cancellation
+**Demo:** Stop button cancels active response.
+
+- Stop button (visible when streaming)
+- Mark message/tools as cancelled
+- Send `POST {opencode_url}/session/{id}/abort`
+- Set suppress_incoming flag
+
+**Success:** Click Stop, response stops, tools marked cancelled
+
+---
+
+## Phase 6: Multi-Tab (Sessions 25-27)
+
+### Session 25: Tab Bar
+**Demo:** Create and switch between tabs.
+
+- Tab bar component
+- "+" button to create tab
+- Click tab to switch
+- Active tab highlighting
+
+**Success:** Create 3 tabs, switch between them
+
+---
+
+### Session 26: Tab State Isolation
+**Demo:** Each tab has independent chat.
+
+- Per-tab session ID
+- Per-tab message list
+- Per-tab model/agent selection
+- Route SSE events by session ID
+
+**Success:** Different conversations in different tabs
+
+---
+
+### Session 27: Tab Close + Rename
+**Demo:** Close tabs, rename via context menu.
+
+- "X" button to close tab
+- Delete session on close
+- Right-click context menu
+- Inline rename with Enter/Escape
+
+**Success:** Rename tab, close tab
+
+---
+
+## Phase 7: Advanced Auth (Sessions 28-30)
+
+### Session 28: Provider Status
+**Demo:** See which providers are connected.
+
+- Fetch `GET {opencode_url}/provider` on OpenCode server connect
+- Show indicators in model selector
+- 🟢 for connected OAuth providers
+
+**Success:** See provider status indicators
+
+---
+
+### Session 29: OAuth Mode Toggle
+**Demo:** Switch Anthropic between API key and OAuth.
+
+- Checkbox in footer: API Key / Subscription
+- Read OAuth tokens from .env cache
+- `PUT {opencode_url}/auth/anthropic` with OAuth tokens
+- `POST {opencode_url}/instance/dispose` to reload
+
+**Success:** Toggle to OAuth, verify in OpenCode server logs
+
+---
+
+### Session 30: OAuth Countdown
+**Demo:** See OAuth expiry timer.
+
+- Display: "⏱ 23h 59m remaining"
+- Color coding: 🟢 >5m, 🟡 0-5m, 🔴 expired
+- Update every second
+- Refresh button
+
+**Success:** See countdown ticking
+
+---
+
+## Phase 8: Model Discovery (Sessions 31-33)
+
+### Session 31: Model Discovery UI
+**Demo:** Open discovery modal, see provider list.
+
+- "+ Add Model" button in settings
+- Modal with provider buttons (OpenAI, Anthropic, Google, OpenRouter)
+- Click provider to start discovery
+
+**Success:** Click OpenAI, see loading state
+
+---
+
+### Session 32: Provider API Calls
+**Demo:** Fetch models from provider API.
+
+- Read API key from environment
+- Call provider's models endpoint
+- Parse response using provider config
+- Display model list with search
+
+**Success:** See 50+ OpenAI models listed
+
+---
+
+### Session 33: Add/Remove Models
+**Demo:** Add model to curated list.
+
+- "+" button next to each discovered model
+- Add to models.toml
+- Remove button in curated list
+- Prevent duplicates
+
+**Success:** Add GPT-4, see it in curated list
+
+---
+
+## Phase 9: Rendering & Polish (Sessions 34-38)
+
+### Session 34: Markdown Rendering
+**Demo:** Code blocks and formatting display correctly.
+
+- Markdig for markdown parsing
+- Code fence normalization
+- Render to HTML in Blazor
+
+**Success:** Send "show me a code example", see formatted code
+
+---
+
+### Session 35: Syntax Highlighting
+**Demo:** Code blocks have colored syntax.
+
+- Highlight.js or similar
+- Language detection
+- Theme matching app style
+
+**Success:** Python code has colored keywords
+
+---
+
+### Session 36: Reasoning Sections
+**Demo:** Extended thinking in collapsible section.
+
+- `reasoning_parts` handling
+- Collapsible "Reasoning" section
+- Default open if no text yet
+- Auto-collapse when done
+
+**Success:** See reasoning expand/collapse
+
+---
+
+### Session 37: Token Counts
+**Demo:** See token usage below messages.
+
+- Display: "tokens: in 123, out 456, reason 78"
+- Small gray text
+- Only for assistant messages
+
+**Success:** See token counts after response
+
+---
+
+### Session 38: UI Preferences
+**Demo:** Change font size, density.
+
+- Font size: Small/Standard/Large
+- Chat density: Compact/Normal/Comfortable
+- Live preview
+- Persist to config
+
+**Success:** Change to Large font, restart, still Large
+
+---
+
+## Phase 10: Attachments & Audio (Sessions 39-42)
+
+### Session 39: Clipboard Image Paste
+**Demo:** Paste image from clipboard.
+
+- "📋 Paste" button
+- Tauri clipboard API
+- PNG encoding
+- Preview with remove button
+
+**Success:** Paste screenshot, see preview
+
+---
+
+### Session 40: Send Attachments
+**Demo:** Image sent with message.
+
+- Base64 encode image
+- Include in message parts as `{ type: "file", mime: "image/png", url: "data:..." }`
+- Clear attachments after send
+
+**Success:** Send image, Claude describes it
+
+---
+
+### Session 41: Audio Capture
+**Demo:** Push-to-talk records audio.
+
+- Tauri audio plugin
+- Configurable hotkey
+- Recording indicator
+- State machine: Idle → Recording → Processing
+
+**Success:** Hold key, see "🎙 Recording..."
+
+---
+
+### Session 42: Whisper Transcription
+**Demo:** Speech appears as text.
+
+- Whisper model loading
+- Resample to 16kHz mono
+- Local inference
+- Append to input box
+
+**Success:** Speak, see transcription in input
+
+---
+
+## Phase 11: Ship (Sessions 43-45)
+
+### Session 43: Error Handling
+**Demo:** Errors display gracefully.
+
+- Network errors
+- Server errors
+- Validation errors
+- Toast notifications
+
+**Success:** Disconnect network, see error message
+
+---
+
+### Session 44: Cross-Platform Testing
+**Demo:** Works on Mac, Windows, Linux.
+
+- Test on each platform
+- Fix platform-specific issues
+- Build verification
+
+**Success:** All platforms work
+
+---
+
+### Session 45: Documentation + Release
+**Demo:** Ready for users.
+
+- README updates
+- Build instructions
+- Release process
+
+**Success:** Someone else can build and use it
+
+---
+
+## Summary
+
+| Phase | Sessions | Features |
+|-------|----------|----------|
+| 1. Communication | 5-8 | IPC server + client |
+| 2. Config & Auth | 9-12 | Settings, models, API key sync |
+| 3. Basic Chat | 13-16 | Send/receive messages, streaming |
+| 4. Agents | 17-19 | Agent pane, selection, filtering |
+| 5. Tools | 20-24 | Tool display, permissions, cancellation |
+| 6. Multi-Tab | 25-27 | Tab bar, isolation, rename |
+| 7. Advanced Auth | 28-30 | Provider status, OAuth toggle, countdown |
+| 8. Model Discovery | 31-33 | Dynamic model fetching |
+| 9. Rendering | 34-38 | Markdown, syntax, reasoning, tokens |
+| 10. Attachments | 39-42 | Clipboard paste, audio/STT |
+| 11. Ship | 43-45 | Polish and release |
+
+**Total: 41 sessions (Sessions 5-45)**

@@ -1,5 +1,6 @@
 pub mod discovery;
 pub mod spawn;
+pub mod ws;
 
 use thiserror::Error;
 
@@ -10,4 +11,7 @@ pub enum CoreError {
 
     #[error(transparent)]
     Spawn(#[from] spawn::SpawnError),
+
+    #[error(transparent)]
+    Ws(#[from] ws::WsError),
 }
