@@ -93,14 +93,40 @@ clients/tauri-blazor/                        # Feature root (self-contained)
 
 ## Architecture
 
-- **Tauri Backend** (`apps/desktop/opencode/src/`): Rust code handling system integration, server discovery, and command execution
-- **Shared Core** (`backend/client-core/`): Reusable Rust logic for server discovery, spawning, and health checks
+**Core Principle:** [Tauri is ONLY for webview hosting](./docs/adr/0002-thin-tauri-layer-principle.md). All application logic lives in `client-core`.
+
+```
+Blazor (C#) → [gRPC] → client-core (Rust) → [HTTP/SSE] → OpenCode Server
+                            ↑
+                     Tauri calls start()
+```
+
+### Layer Responsibilities
+
+- **Tauri Layer** (`apps/desktop/opencode/src/`): Webview host + minimal glue code
+  - Hosts Blazor webview
+  - Calls `client_core::grpc::start_grpc_server()`
+  - Provides OS-specific APIs (file dialogs, system tray)
+  - **Does NOT contain business logic**
+
+- **client-core** (`backend/client-core/`): Self-contained application engine
+  - gRPC server implementation
+  - OpenCode server HTTP client
+  - Session/message/tool/agent management
+  - All business logic (testable without Tauri)
   - Unit tests in `src/tests/` (mirror source structure)
   - Integration tests in `integration_tests/` (configured via `[[test]]` in Cargo.toml)
-- **Models & Utilities** (`models/`): Shared models (ServerInfo) and utilities (ErrorLocation trait) used across all crates
+
+- **Models & Utilities** (`models/`): Shared models and utilities across all crates
+  - ServerInfo model (protobuf-generated)
+  - ErrorLocation trait for error tracking
   - Unit tests in `src/tests/`
-  - Contains teaching-focused documentation about layered architecture
-- **Blazor Frontend** (`frontend/opencode/`): C# Blazor WebAssembly UI compiled to the `apps/desktop/opencode/frontend/` directory
+
+- **Blazor Frontend** (`frontend/opencode/`): C# UI layer (compiled to `apps/desktop/opencode/frontend/`)
+  - Razor components (Radzen UI library)
+  - gRPC client services (thin wrappers)
+  - Markdown rendering (Markdig)
+  - **Does NOT directly call OpenCode server** (goes through gRPC → client-core)
 
 ## Development
 
@@ -163,6 +189,29 @@ dotnet test Desktop.sln
 
 ## References
 
-- Architecture Decision Record: `/docs/adr/0001-tauri-blazor-desktop-client.md`
-- Session Plan: `SESSION_PLAN.md`
-- Cognexus reference project: `/Users/tony/git/cognexus`
+### Architecture Decision Records (ADRs)
+
+**Universal Constraints (READ FIRST):**
+- [No Custom JavaScript Policy](./docs/adr/NO_CUSTOM_JAVASCRIPT_POLICY.md) - ZERO custom JavaScript (ABSOLUTE requirement)
+
+**ADRs:**
+- [ADR Index](./docs/adr/README.md) - All architectural decisions
+- [ADR-0001: Tauri + Blazor Desktop Client](./docs/adr/0001-tauri-blazor-desktop-client.md) - Why Tauri+Blazor was chosen
+- [ADR-0002: Thin Tauri Layer Principle](./docs/adr/0002-thin-tauri-layer-principle.md) - Separation of concerns
+
+### Documentation
+
+**Architecture:**
+- [Architecture Guide](./docs/ARCHITECTURE.md) - Implementation guide (how to code, examples, anti-patterns)
+- [ADR Index](./docs/adr/README.md) - Architecture Decision Records (why decisions were made)
+
+**Implementation:**
+- [Session Plan](./SESSION_PLAN.md) - Implementation sessions (1-6)
+- [Protobuf Documentation](./docs/proto/README.md) - Data model schemas (72+ JSON schemas)
+
+### External References
+
+- Cognexus reference project: `/Users/tony/git/cognexus` (proven Tauri+Blazor pattern)
+- Tauri: https://tauri.app/
+- Blazor: https://learn.microsoft.com/en-us/aspnet/core/blazor/
+- Radzen: https://blazor.radzen.com/

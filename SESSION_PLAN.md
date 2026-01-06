@@ -115,7 +115,29 @@ Build a new Tauri + Blazor WebAssembly desktop client as an alternative to egui,
 
 ## Session 4: Data Models & gRPC Service Infrastructure
 
-**Goal:** Define comprehensive protobuf schema and gRPC service interface based on opencode-egui client audit (submodules/opencode-egui/). Group data models logically by domain: Sessions, Messages, Tools, Agents, Auth, and Events.
+**Goal:** Define comprehensive protobuf schema and gRPC service interface based on OpenCode server JSON Schema definitions. Group data models logically by domain: Sessions, Messages, Tools, Agents, Auth, and Events.
+
+---
+
+### SCOPE CHANGE: Documentation-First Approach ✅
+
+**What actually happened (2026-01-04 to 2026-01-05):**
+
+Instead of writing protobuf directly, we took a more rigorous approach:
+
+1. **Created 72+ JSON Schema files** from OpenCode server TypeScript/Zod types
+2. **Generated Zod validators** from schemas (single source of truth)
+3. **Refactored OpenCode server** to use generated validators (544 tests pass)
+4. **Documented 9 protobuf domains** with cross-reference tables (4,400+ lines)
+
+**Why this was better:**
+
+- JSON Schema is the canonical source (matches OpenCode server exactly)
+- Automated validation prevents drift between TypeScript ↔ JSON Schema ↔ Protobuf
+- Generated code eliminates manual transcription errors
+- Documentation is now traceable to specific schema files
+
+**Result:** Session 4 became a documentation + schema generation phase instead of coding phase.
 
 ---
 
@@ -131,44 +153,50 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Key Design Decisions:**
 
-1. **Composition Over Duplication**
+1. **JSON Schema as Source of Truth**
+   - All protobuf definitions derive from `submodules/opencode/schema/*.schema.json`
+   - Generator validates schemas and produces Zod validators
+   - TypeScript source refactored to use generated validators
+   - **Why:** Single source prevents drift, enables automated validation
+
+2. **Composition Over Duplication**
    - `TabInfo` contains `SessionInfo` (not duplicate fields)
    - `ModelSelection` contains `ProviderInfo` (not just provider_id string)
    - **Why:** Single source of truth, no sync issues between duplicated fields
 
-2. **Stable vs. Volatile Data Separation**
+3. **Stable vs. Volatile Data Separation**
    - `ProviderInfo` (name, source) included in `ModelSelection` - stable, safe to cache
    - `ProviderAuthInfo` (type, expires) queried separately - volatile, must be fresh
    - **Why:** Auth can change (OAuth ↔ API key switch), provider metadata doesn't
 
-3. **Per-Provider Auth (Not Global)**
+4. **Per-Provider Auth (Not Global)**
    - Each provider has its own auth mode (`anthropic`: OAuth, `openai`: API key)
    - Auth tracked per provider_id, not globally
    - **Why:** Server's `auth.json` structure has per-provider auth entries
 
-4. **UI-Centric Data Models**
+5. **UI-Centric Data Models**
    - `ModelSelection` includes `ProviderInfo` for clean UI display
    - `ProviderInfo` includes curated models list (not all discoverable models)
    - No extra lookups needed for common UI tasks (model picker, tab header)
    - **Why:** Frontend perspective - reduce boilerplate, improve code clarity
 
-5. **Curated Models Over Discovery**
+6. **Curated Models Over Discovery**
    - `ProviderInfo.models` contains only configured/curated models (from server)
    - Model discovery UI (add arbitrary models) deferred to Session 5
    - **Why:** Curated list is what user actually wants in model picker (not giant unfiltered list)
    - **Maps to:** OpenCode server `GET /config/providers` endpoint
 
-6. **Comprehensive Tool State**
+7. **Comprehensive Tool State**
    - Tool execution includes logs, metadata, timing (learned from opencode-egui audit in submodules/)
    - Supports rich UI (progress indicators, log viewers, timing charts)
    - **Why:** Users need visibility into what tools are doing
 
-7. **Event Streaming Translation**
+8. **Event Streaming Translation**
    - SSE events from OpenCode server translated to gRPC streams
    - Blazor consumes unified event stream (no SSE client needed)
    - **Why:** Consistent API surface, easier testing, better type safety
 
-8. **Typed Model Options (Not Generic Maps)**
+9. **Typed Model Options (Not Generic Maps)**
    - `ModelOptions` uses proper protobuf types with provider-specific submessages
    - Each provider (OpenAI, Google, Anthropic) has its own strongly-typed options message
    - Universal options (temperature, maxOutputTokens) in separate message
@@ -178,125 +206,425 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 **Scope Boundaries:**
 
-- ✅ **In Scope:** All data models, service definitions, protobuf schemas
-- ✅ **In Scope:** Stubbed gRPC service methods (return "Not implemented")
+- ✅ **In Scope:** JSON Schema definitions (72+ files)
+- ✅ **In Scope:** Protobuf documentation (9 files, 4,400+ lines)
+- ✅ **In Scope:** Cross-reference tables (JSON Schema ↔ Protobuf)
+- ❌ **Out of Scope:** Actual protobuf `.proto` files (Session 4.5)
+- ❌ **Out of Scope:** gRPC service implementation (Session 4.5)
 - ❌ **Out of Scope:** OpenCode server HTTP calls (Session 4.5)
 - ❌ **Out of Scope:** UI implementation (Session 4.5)
-- ❌ **Out of Scope:** SSE event parsing (Session 4.5)
 
 ---
 
-### Implementation Steps
+### Documentation Completed
 
-**See [PROTO_SCHEMA.md](./PROTO_SCHEMA.md) for complete protobuf definitions (40+ messages, 6 services)**
+**See [docs/proto/](./docs/proto/) for complete documentation**
 
-**Session 4 Workflow:**
+**9 Proto Documentation Files (4,400+ lines):**
 
-1. **Create Proto Files** - 7 files organized by domain (session, message, tool, agent, auth, event, service)
-2. **Generate Code** - Run `protoc` to generate Rust (tonic/prost) and C# (Grpc.Tools) code
-3. **Stub Services** - Implement all 6 gRPC services in `client-core`, all methods return "Not implemented"
-4. **Wire Tauri** - Initialize gRPC server on `localhost:50051` in Tauri main.rs
-5. **Test Connectivity** - Blazor → gRPC → Rust stub → "Not implemented" error (success!)
-6. **Verify Logging** - Production-grade logging throughout
+1. `01-model.md` - Model metadata, capabilities, cost, limits (265 lines)
+2. `02-provider.md` - Provider management, SDK options (146 lines)
+3. `03-auth.md` - Authentication per provider (177 lines)
+4. `04-session.md` - Session/tab management (300 lines)
+5. `05-message.md` - User/assistant messages (780 lines) ⭐ largest
+6. `06-tool.md` - Tool execution state (317 lines)
+7. `07-agent.md` - Agent listing (207 lines)
+8. `08-event.md` - SSE event streaming (479 lines)
+9. `09-opencode.md` - Main service aggregator (196 lines)
+
+**Supporting Documentation:**
+
+- `README.md` - Overview, build order, version history (231 lines)
+- `SCHEMA_DEVELOPMENT_PROCESS.md` - Workflow guide (1,031 lines)
+- `NEXT_SESSION_PROMPT.md` - Session 4.5 prompt (305 lines)
+
+**JSON Schema Files Created:**
+
+| Domain | Schema Files | Status |
+|--------|-------------|--------|
+| Model | 8 files | ✅ Complete |
+| Provider | 6 files | ✅ Complete |
+| Auth | 4 files | ✅ Complete |
+| Session | 10 files | ✅ Complete |
+| Message | 20 files | ✅ Complete |
+| Tool | 9 files | ✅ Complete |
+| Agent | 2 files | ✅ Complete |
+| Event | 13 files | ✅ Complete |
+| **Total** | **72+ files** | ✅ Complete |
+
+---
+
+**Status:** ✅ Complete (Documentation Phase)
+
+**Actual Tokens:** ~60K (documentation + schema validation)
+
+**Deliverables:**
+
+- ✅ 9 protobuf documentation files (4,400+ lines)
+- ✅ 72+ JSON Schema files (canonical source of truth)
+- ✅ Cross-reference tables for all types (JSON ↔ Proto)
+- ✅ Schema generator validated all schemas
+- ✅ OpenCode server refactored to use generated validators
+- ✅ All 544 OpenCode server tests pass
+- ✅ Build succeeds for 11 platforms
+- ⏭️ Actual `.proto` files (deferred to Session 4.5)
+- ⏭️ gRPC service implementation (deferred to Session 4.5)
+
+---
+
+## Session 4.5: gRPC Communication Layer (Backend Only)
+
+**Goal:** Complete working gRPC layer with all services implemented. **NO GUI** - testable via grpcurl or simple C# console app.
+
+**Philosophy:** Session 4.5 is purely about the **communication layer**. Building actual GUI elements is Session 5 (completely separate).
+
+---
+
+### Step 1: Create Protobuf Files from Documentation
+
+**Input:** Documentation in `docs/proto/*.md` (4,400+ lines, all complete)
+
+**Output:** Actual `.proto` files in `proto/` directory
+
+**Tasks:**
+
+1. Create `proto/model.proto` from `docs/proto/01-model.md`
+2. Create `proto/provider.proto` from `docs/proto/02-provider.md`
+3. Create `proto/auth.proto` from `docs/proto/03-auth.md`
+4. Create `proto/session.proto` from `docs/proto/04-session.md`
+5. Create `proto/message.proto` from `docs/proto/05-message.md`
+6. Create `proto/tool.proto` from `docs/proto/06-tool.md`
+7. Create `proto/agent.proto` from `docs/proto/07-agent.md`
+8. Create `proto/event.proto` from `docs/proto/08-event.md`
+9. Create `proto/opencode.proto` from `docs/proto/09-opencode.md`
+
+**Technical Details:**
+
+- Follow dependency order: `model` → `provider` → `auth` → `session` → `tool` → `message` → `agent` → `event` → `opencode`
+- Use `import` statements for dependencies
+- Add service definitions to `opencode.proto`
+- Verify with `protoc` compiler
+
+**Estimated:** ~20K tokens (mostly copy-paste from docs with syntax adjustments)
+
+---
+
+### Step 2: Generate Code (Rust + C#)
+
+**Rust (client-core):**
+
+1. Update `backend/client-core/build.rs` with `tonic-build` configuration
+2. Add dependencies: `tonic`, `prost`, `tokio`
+3. Run `cargo build` to generate Rust code from protos
+4. Verify generated code compiles
+
+**C# (Blazor):**
+
+1. Update `frontend/desktop/opencode/Opencode.csproj` with `Grpc.Tools`
+2. Add `<Protobuf>` items for all `.proto` files
+3. Run `dotnet build` to generate C# client code
+4. Verify generated code compiles
+
+**Estimated:** ~10K tokens (build configuration + verification)
+
+---
+
+### Step 3: Implement gRPC Services in client-core
+
+**Service Implementation (Rust):**
+
+Create service handlers that call OpenCode server HTTP REST API:
+
+1. **SessionService** - `ListSessions`, `CreateSession`, `DeleteSession`, `UpdateSessionDirectory`
+2. **ProviderService** - `GetProviders` (GET /config/providers)
+3. **MessageService** - `SendMessage`, `GetMessages`, `AbortSession`
+4. **PermissionService** - `RespondToPermission`
+5. **AgentService** - `ListAgents` (GET /agent)
+6. **AuthService** - `GetAuthStatus`, `GetProviderAuth`, `GetProviderStatus`, `SwitchProviderAuth`
+7. **EventService** - `SubscribeGlobalEvents` (SSE → gRPC stream translation)
+
+**Implementation Strategy:**
+
+- Start with stubs (return "Not implemented")
+- Implement session management first (simplest)
+- Add HTTP client for OpenCode server calls
+- Implement SSE → gRPC streaming for events (most complex)
+
+**Estimated:** ~70K tokens (core service implementation - this is the hard part)
+
+**Implementation details:**
+- HTTP client setup (reqwest or hyper)
+- OpenCode server communication (REST API calls)
+- SSE event parsing (eventsource or custom parser)
+- SSE → gRPC stream translation (most complex)
+- Error mapping (HTTP/SSE errors → gRPC Status)
+- State management (active sessions, pending requests)
+
+---
+
+### Step 4: Expose gRPC Server Startup from client-core
+
+**Architecture Principle:** Tauri layer is **only** for hosting the webview. All application logic lives in client-core.
+
+**Tasks:**
+
+1. Export `start_grpc_server()` function from `backend/client-core/src/grpc/mod.rs`
+2. Update `apps/desktop/opencode/src/main.rs` to call `client_core::grpc::start_grpc_server()`
+3. Spawn in tokio task (non-blocking)
+4. Handle graceful shutdown via Tauri's drop handler
+
+**Implementation in client-core:**
+
+```rust
+// backend/client-core/src/grpc/mod.rs
+pub async fn start_grpc_server(addr: impl Into<SocketAddr>) -> Result<(), Error> {
+    let server = OpenCodeGrpcServer::new();
+    Server::builder()
+        .add_service(OpenCodeServiceServer::new(server))
+        .serve(addr.into())
+        .await?;
+    Ok(())
+}
+```
+
+**Tauri integration (minimal glue code):**
+
+```rust
+// apps/desktop/opencode/src/main.rs
+use client_core::grpc;
+
+fn main() {
+    tauri::Builder::default()
+        .setup(|app| {
+            // Start gRPC server in background
+            tokio::spawn(async {
+                if let Err(e) = grpc::start_grpc_server("127.0.0.1:50051").await {
+                    error!("gRPC server failed: {}", e);
+                }
+            });
+            Ok(())
+        })
+        .run(...)
+}
+```
+
+**Why this is better:**
+- Tauri is just a thin wrapper (hosts webview, spawns gRPC server, done)
+- client-core is self-contained and testable without Tauri
+- Follows the pattern from Sessions 1 & 2 (Tauri **uses** client-core, doesn't contain logic)
+- Reusable for future clients (CLI, different GUI framework, etc.)
+
+**Estimated:** ~5K tokens (down from 10K - it's now trivial glue code)
+
+---
+
+### Step 5: Test gRPC Services (No GUI Required)
+
+**Goal:** Verify all services work without building any UI.
+
+**Testing Approaches:**
+
+1. **grpcurl (command-line testing):**
+   ```bash
+   grpcurl -plaintext localhost:50051 list
+   grpcurl -plaintext localhost:50051 opencode.OpenCodeService/ListSessions
+   grpcurl -plaintext localhost:50051 opencode.OpenCodeService/GetProviders
+   ```
+
+2. **Simple C# console app:**
+   ```csharp
+   var channel = GrpcChannel.ForAddress("http://localhost:50051");
+   var client = new OpenCodeServiceClient(channel);
+   
+   var sessions = await client.ListSessionsAsync(new Empty());
+   Console.WriteLine($"Sessions: {sessions.Sessions.Count}");
+   
+   var providers = await client.GetProvidersAsync(new Empty());
+   Console.WriteLine($"Providers: {providers.Providers.Count}");
+   ```
+
+3. **Rust integration tests:**
+   - Test each service handler directly
+   - Mock OpenCode server responses
+   - Verify error handling
+
+**Deliverable:** All 7 services respond correctly. Can create sessions, send messages, stream events - all testable without GUI.
+
+**Estimated:** ~10K tokens (testing + documentation)
 
 ---
 
 **Status:** ⏳ Pending
 
-**Estimated Tokens:** ~160K (expanded significantly due to comprehensive data modeling)
+**Estimated Tokens:** ~120K (backend/communication layer only - no GUI)
 
 **Deliverables:**
 
-- ✅ 7 protobuf files with logical grouping (session, message, tool, agent, auth, event, service)
-- ✅ All protobuf messages defined (40+ messages total)
-- ✅ 6 gRPC services stubbed in client-core (SessionService, MessageService, PermissionService, AgentService, AuthService, EventService)
-- ✅ Tauri hosts gRPC server on localhost:50051
-- ✅ Basic connectivity test from Blazor passes
-- ✅ Comprehensive logging throughout
-- ✅ Zero OpenCode server calls (all stubs)
+- ✅ 9 `.proto` files created from documentation
+- ✅ Rust code generated via `tonic-build`
+- ✅ C# client code generated via `Grpc.Tools`
+- ✅ All 7 gRPC services implemented in client-core:
+  - SessionService (create, list, delete sessions)
+  - ProviderService (list providers with models)
+  - MessageService (send, receive, abort messages)
+  - PermissionService (respond to permission requests)
+  - AgentService (list agents)
+  - AuthService (manage auth per provider)
+  - EventService (SSE → gRPC streaming)
+- ✅ HTTP client for OpenCode server REST API
+- ✅ SSE event parsing and gRPC stream translation
+- ✅ client-core exports `start_grpc_server()` function
+- ✅ Tauri calls `client_core::grpc::start_grpc_server()` (5 lines of glue)
+- ✅ gRPC server runs on localhost:50051
+- ✅ **Tested via grpcurl or simple C# console app (NO GUI)**
+- ✅ All error handling across HTTP/gRPC boundary
+- ✅ Production-grade logging throughout
+
+**Out of Scope (moved to Session 5):**
+- ❌ Blazor UI components (no Razor files)
+- ❌ Tab/session management UI
+- ❌ Chat interface
+- ❌ Markdown rendering
+- ❌ Visual auth/settings UI
 
 ---
 
-## Session 4.5: App State & gRPC Service Implementation
+## Session 5: Blazor UI (Frontend Only)
 
-### Step 1: Implement gRPC Service Logic in client-core
+**Goal:** Build complete Blazor interface that consumes the gRPC services from Session 4.5.
 
-**Chat Operations:**
+**Prerequisites:** Session 4.5 complete (working gRPC server)
 
-- Call OpenCode server HTTP REST API
-- Handle message streaming from OpenCode SSE
-- Convert SSE chunks to gRPC streams
+---
 
-**Session/Tab Management:**
+### Step 1: Blazor gRPC Client Services
 
-- Implement tab CRUD in memory (or persistent storage)
-- Track active tab state
-- Persist selected model/agent per tab
-- Track and send working directory per tab (x-opencode-directory header)
+**C# Service Layer:**
 
-**Agent Management:**
+Create thin wrappers around gRPC client:
 
-- Fetch agents from OpenCode server
-- List available agents
-- Handle agent selection per tab
+1. `frontend/Services/ISessionService.cs` + `SessionService.cs`
+   - ListSessions, CreateSession, DeleteSession
+   - Wraps `OpenCodeServiceClient.ListSessionsAsync()` etc.
 
-**Provider/Auth Management:**
+2. `frontend/Services/IProviderService.cs` + `ProviderService.cs`
+   - GetProviders (returns ProviderList with models)
 
-- Fetch provider status from OpenCode server
-- Implement auth mode switching (subscription vs API key)
-- Track OAuth expiry
+3. `frontend/Services/IMessageService.cs` + `MessageService.cs`
+   - SendMessage, GetMessages, AbortSession
 
-### Step 2: Build Tab/Session Management UI
+4. `frontend/Services/IAgentService.cs` + `AgentService.cs`
+   - ListAgents
 
-- SessionTabs.razor (list of open sessions/tabs)
-- TabBar showing session title and state
-- Create/delete tab buttons
-- Select active tab
-- Show current model/agent selection
-- Directory input per tab (sent as x-opencode-directory header)
-- Stop/Abort button for active streaming response
+5. `frontend/Services/IAuthService.cs` + `AuthService.cs`
+   - GetAuthStatus, GetProviderAuth, SwitchProviderAuth
 
-### Step 3: Build Chat UI Components
+6. `frontend/Services/IEventService.cs` + `EventService.cs`
+   - SubscribeGlobalEvents (gRPC stream → C# event handlers)
 
-- Chat.razor with message display
-- ChatService.cs gRPC client wrapper
-- Message input box
-- Connect to streaming responses
-- Error handling and loading states
+**All use `Grpc.Net.Client` to call localhost:50051.**
 
-### Step 4: Integrate Auth Mode UI & Provider Status
+**Estimated:** ~25K tokens
 
-- Auth mode toggle (subscription vs API key)
-- Display OAuth expiry time
-- Show connected providers
-- Handle auth switching
+---
+
+### Step 2: Session/Tab Management UI
+
+**Razor Components:**
+
+1. `frontend/Pages/Sessions.razor` - Session list sidebar
+2. `frontend/Components/TabBar.razor` - Tab navigation
+3. `frontend/Components/ModelPicker.razor` - Model/provider dropdown
+4. `frontend/Components/AgentPicker.razor` - Agent selection dropdown
+5. `frontend/Components/DirectoryInput.razor` - Working directory input
+
+**Functionality:**
+
+- Create new session button
+- Delete session button
+- Switch between tabs (active tab highlighting)
+- Select model per session (calls ProviderService)
+- Select agent per session (calls AgentService)
+- Set working directory (stored per session)
+
+**Estimated:** ~30K tokens
+
+---
+
+### Step 3: Chat UI with Message Streaming
+
+**Razor Components:**
+
+1. `frontend/Pages/Chat.razor` - Main chat page
+2. `frontend/Components/MessageList.razor` - Scrollable message list
+3. `frontend/Components/MessageInput.razor` - Text input + send button
+4. `frontend/Components/MessageRenderer.razor` - Renders message parts
+5. `frontend/Components/ToolCallView.razor` - Tool execution display
+6. `frontend/Services/MarkdownService.cs` - Markdig wrapper
+
+**Functionality:**
+
+- Display user/assistant messages
+- Stream assistant responses in real-time (EventService → UI updates)
+- Render 11 different message part types:
+  - TextPart → Markdown rendering
+  - ReasoningPart → Collapsible section
+  - ToolPart → Tool execution state (pending/running/completed/error)
+  - FilePart → File attachments
+  - StepStartPart/StepFinishPart → Step markers
+  - etc.
+- Handle errors (MessageError union types)
+- Loading states
+- Abort button (calls MessageService.AbortSession)
+
+**Estimated:** ~50K tokens (most complex UI component)
+
+---
+
+### Step 4: Provider Status & Auth UI
+
+**Razor Components:**
+
+1. `frontend/Pages/Settings.razor` - Settings page
+2. `frontend/Components/ProviderStatus.razor` - Connected providers list
+3. `frontend/Components/AuthModeToggle.razor` - OAuth vs API key switch
+
+**Functionality:**
+
+- Display all providers (from ProviderService)
+- Show auth status per provider (OAuth token expiry, API key present)
+- Switch auth modes (calls AuthService.SwitchProviderAuth)
+- Handle auth errors (ProviderAuthError display)
+
+**Estimated:** ~20K tokens
+
+---
 
 **Status:** ⏳ Pending
 
-**Estimated Tokens:** ~150K (increased due to scope)
+**Estimated Tokens:** ~125K (UI only - backend from Session 4.5)
 
 **Deliverables:**
 
-- ✅ Tab/session management working
-- ✅ Agent selection per tab
-- ✅ Auth mode switching functional
-- ✅ Chat UI with message history
-- ✅ Streaming responses working
-- ✅ Markdown, reasoning, and tool calls rendered
-- ✅ Provider status displayed
+- ✅ Blazor gRPC client services (6 services)
+- ✅ Session/tab management UI (create, switch, delete)
+- ✅ Model picker UI (dropdown with providers + models)
+- ✅ Agent picker UI (dropdown with agents)
+- ✅ Chat interface with streaming messages
+- ✅ Markdown rendering (Markdig)
+- ✅ Tool call visualization (11 part types)
+- ✅ Provider status UI
+- ✅ Auth mode switching UI
+- ✅ All error states and loading indicators
+- ✅ Production-ready Blazor app
 
 ---
 
-## Session 5: Authentication & Settings
+## Session 6: Polish, Testing & Documentation
 
-### Step 1: OAuth Integration
+**Goal:** Make it production-ready and ship it.
 
-- Extract auth logic from opencode-egui (submodules/opencode-egui/) to shared core
-- Create `commands/auth.rs` in Tauri
-- Implement OAuth flow for Anthropic
-- Add API key management
-
-### Step 2: Settings Panel
+### Step 1: Error Handling & Edge Cases
 
 - Create `Settings.razor` page
 - Add model selection UI
@@ -383,61 +711,117 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 - [x] Error notifications working
 - [x] Loading states visual feedback
 
-### Session 4
+### Session 4 (Documentation Phase)
 
-**Data Modeling:**
+**Data Modeling (JSON Schema):**
 
-- [ ] Session models complete (SessionInfo, TabInfo, ModelSelection, SessionTime)
-- [ ] Provider models complete (ProviderInfo with curated models list)
-- [ ] Model models complete (ModelInfo, ModelCapabilities, ModelCost, ModelLimits, IOCapabilities, CacheCost)
-- [ ] ModelOptions complete (UniversalOptions, OpenAIOptions, GoogleOptions, AnthropicOptions with all discovered settings)
-- [ ] Message models complete (SendMessageRequest, DisplayMessage, MessagePart, TextPart, FilePart)
-- [ ] Tool models complete (ToolCallState, PermissionRequest, PermissionResponse)
-- [ ] Agent models complete (AgentInfo, AgentList)
-- [ ] Auth models complete (ProviderAuthInfo, AuthStatus, AuthType, ProviderStatus)
-- [ ] Event models complete (GlobalEvent, MessageUpdated, MessagePartUpdated, PermissionCreated, TokenUsage)
+- [x] Model schemas complete (8 files: modelInfo, modelCapabilities, modelCost, modelLimits, modelStatus, modelAPI, ioCapabilities, cacheCost)
+- [x] Provider schemas complete (6 files: providerInfo, providerSource, providerOptions, providerList)
+- [x] Auth schemas complete (4 files: auth, oauth, apiAuth, wellKnownAuth)
+- [x] Session schemas complete (10 files: sessionInfo, sessionTime, sessionSummary, sessionShare, sessionRevert, fileDiff, permissionRule, permissionRuleset, permissionAction, sessionList)
+- [x] Message schemas complete (20 files: message, userMessage, assistantMessage, 10 part types, 6 error types)
+- [x] Tool schemas complete (9 files: toolState, 4 state variants, toolPart, permissionRequest, permissionReply, permissionToolContext)
+- [x] Agent schemas complete (2 files: agentInfo, agentModel)
+- [x] Event schemas complete (13 files: event, globalEvent, sessionStatus, 4 message events, 4 session events, 2 permission events)
 
-**Service Definitions:**
+**Documentation:**
 
-- [ ] SessionService defined (ListSessions, CreateSession, DeleteSession, UpdateSessionDirectory)
-- [ ] ProviderService defined (GetProviders - returns providers with curated models)
-- [ ] MessageService defined (SendMessage, GetMessages, AbortSession)
-- [ ] PermissionService defined (RespondToPermission)
-- [ ] AgentService defined (ListAgents)
-- [ ] AuthService defined (GetAuthStatus, GetProviderAuth, GetProviderStatus, SwitchProviderAuth)
-- [ ] EventService defined (SubscribeGlobalEvents)
+- [x] `docs/proto/01-model.md` - Model metadata (265 lines)
+- [x] `docs/proto/02-provider.md` - Provider management (146 lines)
+- [x] `docs/proto/03-auth.md` - Authentication (177 lines)
+- [x] `docs/proto/04-session.md` - Session management (300 lines)
+- [x] `docs/proto/05-message.md` - Messages (780 lines)
+- [x] `docs/proto/06-tool.md` - Tool execution (317 lines)
+- [x] `docs/proto/07-agent.md` - Agents (207 lines)
+- [x] `docs/proto/08-event.md` - Event streaming (479 lines)
+- [x] `docs/proto/09-opencode.md` - Service aggregator (196 lines)
+- [x] `docs/proto/README.md` - Overview and index (231 lines)
+- [x] `docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md` - Workflow guide (1,031 lines)
 
-**Implementation:**
+**Validation:**
 
-- [ ] 7 protobuf files created with logical grouping
-- [ ] All 7 services stubbed in client-core (return "Not implemented" errors)
-- [ ] ProviderInfo includes curated models list (from GET /config/providers structure)
-- [ ] ModelInfo includes capabilities, cost, limits (rich metadata for UI)
-- [ ] Tauri initializes gRPC server on localhost:50051
+- [x] All 72+ JSON schemas validated with `bun run generate:schemas`
+- [x] Generated Zod validators match original TypeScript
+- [x] OpenCode server refactored to use generated validators
+- [x] All 544 OpenCode server tests pass
+- [x] Build succeeds for 11 platforms
+
+### Session 4.5 (Implementation Phase)
+
+**Protobuf Files:**
+
+- [ ] `proto/model.proto` created from documentation
+- [ ] `proto/provider.proto` created from documentation
+- [ ] `proto/auth.proto` created from documentation
+- [ ] `proto/session.proto` created from documentation
+- [ ] `proto/message.proto` created from documentation
+- [ ] `proto/tool.proto` created from documentation
+- [ ] `proto/agent.proto` created from documentation
+- [ ] `proto/event.proto` created from documentation
+- [ ] `proto/opencode.proto` created from documentation (aggregator)
+
+**Code Generation:**
+
+- [ ] Rust code generated via `tonic-build` (prost + tonic)
+- [ ] C# client code generated via `Grpc.Tools`
+- [ ] Generated code compiles in both languages
+
+**gRPC Services (Rust):**
+
+- [ ] SessionService implemented (ListSessions, CreateSession, DeleteSession, UpdateSessionDirectory)
+- [ ] ProviderService implemented (GetProviders)
+- [ ] MessageService implemented (SendMessage, GetMessages, AbortSession)
+- [ ] PermissionService implemented (RespondToPermission)
+- [ ] AgentService implemented (ListAgents)
+- [ ] AuthService implemented (GetAuthStatus, GetProviderAuth, GetProviderStatus, SwitchProviderAuth)
+- [ ] EventService implemented (SubscribeGlobalEvents - SSE → gRPC stream)
+- [ ] HTTP client for OpenCode server REST API
+- [ ] SSE event parsing and gRPC streaming
+
+**Tauri Integration:**
+
+- [ ] gRPC server initialized on `localhost:50051`
 - [ ] Graceful shutdown on app exit
-- [ ] Basic connectivity test from Blazor passes (Blazor → gRPC → Rust)
 - [ ] Production-grade logging throughout
-- [ ] Zero OpenCode server HTTP calls (all stubs)
 
-### Session 4.5
+**Blazor Client Services:**
 
-- [ ] Tab/session CRUD operations implemented in client-core
-- [ ] Working directory tracked per tab and sent as x-opencode-directory header
-- [ ] AbortSession implemented (POST /session/{id}/abort)
-- [ ] Agent management working (list, select per tab)
-- [ ] Provider status fetched from OpenCode server
-- [ ] Auth mode switching implemented (subscription vs API key)
-- [ ] Version tracking implemented
-- [ ] OpenCode server communication working (HTTP REST)
-- [ ] Message streaming via gRPC functional end-to-end
-- [ ] SessionTabs.razor displays open tabs and allows creation/deletion
-- [ ] Directory input per tab functional
-- [ ] Stop/Abort button stops active streaming responses
-- [ ] Chat.razor displays messages and accepts input
-- [ ] Markdown renders correctly (text, reasoning, tool calls)
+- [ ] ISessionService + SessionService (gRPC client wrapper)
+- [ ] IProviderService + ProviderService
+- [ ] IMessageService + MessageService
+- [ ] IAgentService + AgentService
+- [ ] IAuthService + AuthService
+- [ ] IEventService + EventService
+- [ ] MarkdownService (Markdig wrapper)
+
+**UI Components:**
+
+- [ ] Sessions.razor - Session list sidebar
+- [ ] TabBar.razor - Tab navigation
+- [ ] ModelPicker.razor - Model/provider selection
+- [ ] AgentPicker.razor - Agent selection
+- [ ] DirectoryInput.razor - Working directory input
+- [ ] Chat.razor - Main chat interface
+- [ ] MessageList.razor - Message display
+- [ ] MessageInput.razor - User input box
+- [ ] MessageRenderer.razor - Markdown rendering
+- [ ] Settings.razor - Settings page
+- [ ] ProviderStatus.razor - Provider connection status
+- [ ] AuthModeToggle.razor - OAuth vs API key toggle
+
+**Functionality:**
+
+- [ ] Tab/session CRUD operations working
+- [ ] Working directory tracked per tab (x-opencode-directory header)
+- [ ] AbortSession working (POST /session/{id}/abort)
+- [ ] Agent selection per tab
+- [ ] Model/provider selection per tab
+- [ ] Message streaming via gRPC (SSE → gRPC translation)
+- [ ] Markdown rendering (text, code, reasoning, tool calls)
 - [ ] Token counts displayed
-- [ ] Auth UI shows current mode and expiry
-- [ ] Error handling and loading states working
+- [ ] Provider status displayed
+- [ ] Auth mode switching functional
+- [ ] Error handling and loading states
 
 ### Session 5
 
@@ -455,13 +839,70 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 ## Notes & Decisions
 
+### Session 4 (2026-01-04 to 2026-01-05) ✅
+
+**Accomplishments:**
+
+- ✅ Created 72+ JSON Schema files from OpenCode server TypeScript/Zod types
+- ✅ Organized schemas by domain: Model (8), Provider (6), Auth (4), Session (10), Message (20), Tool (9), Agent (2), Event (13)
+- ✅ Wrote comprehensive documentation (4,400+ lines across 9 proto docs)
+- ✅ Created cross-reference tables for all types (JSON Schema ↔ Protobuf)
+- ✅ Generated Zod validators from JSON schemas
+- ✅ Refactored OpenCode server to use generated validators
+- ✅ Validated all schemas with `bun run generate:schemas`
+- ✅ All 544 OpenCode server tests pass after refactoring
+- ✅ Build succeeds for 11 platforms
+
+**Files Created:**
+
+- `submodules/opencode/schema/*.schema.json` - 72+ JSON Schema files
+- `docs/proto/01-model.md` through `docs/proto/09-opencode.md` - 9 documentation files
+- `docs/proto/README.md` - Overview and version history
+- `docs/proto/SCHEMA_DEVELOPMENT_PROCESS.md` - Workflow documentation
+- `docs/proto/SESSION_4_SCHEMA_PROMPT_ARCHIVE.md` - Session 4 schema creation prompt (archived)
+
+**Technical Decisions:**
+
+- **JSON Schema as source of truth** - Chose JSON Schema over protobuf-first to match OpenCode server exactly
+- **Generated validators** - Used custom generator (`script/generate-from-schemas.ts`) to produce Zod validators
+- **Discriminated unions** - Used `oneOf` with `type`/`name`/`role` discriminators throughout
+- **Comprehensive error types** - Created NamedError pattern with 6 error variants
+- **72+ schemas** - Far more than initially estimated due to thorough coverage of all OpenCode types
+
+**Key Learnings:**
+
+- JSON Schema → Zod → TypeScript is more reliable than manual protobuf translation
+- OpenCode server has ~72 distinct types requiring schemas (not 40+)
+- Message system is most complex domain (20 schemas: 11 parts, 6 errors, 3 message types)
+- Cross-reference tables essential for protobuf → JSON Schema traceability
+
+**Scope Change:**
+
+- Original plan: Write `.proto` files directly
+- Actual approach: Create JSON schemas first, document protobuf second
+- Rationale: Single source of truth, automated validation, better alignment with OpenCode server
+
+**Deferred to Session 4.5:**
+
+- Actual `.proto` file creation (will copy from documentation)
+- Code generation (Rust via tonic-build, C# via Grpc.Tools)
+- gRPC service implementation
+- UI components
+
+**Next Steps:**
+
+- Session 4.5 will create `.proto` files from completed documentation
+- Much faster now that all types are documented and validated
+
+---
+
 ### Session 1 (2026-01-02) ✅
 
 **Accomplishments:**
 
 - ✅ Created workspace at repository root with Cargo.toml
 - ✅ Built `backend/client-core/` crate from scratch (NOT extracted from egui)
-- ✅ Built `common/` crate for shared ErrorLocation utilities
+- ✅ Built `models/` crate for shared ErrorLocation utilities (renamed from `common/`)
 - ✅ Implemented production-grade error handling:
   - `CoreError`, `DiscoveryError`, `SpawnError` with ErrorLocation tracking
   - All errors use `common` crate for location tracking
@@ -688,6 +1129,7 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 3. **Tauri 2.9.5+** - Match Cognexus proven version
 4. **Radzen Components** - Use for all UI (no custom DOM manipulation)
 5. **Shared Rust Code** - Maximize code reuse between egui and tauri-blazor
+6. **Tauri = Webview Host Only** - All application logic lives in client-core (not Tauri)
 
 ---
 
@@ -732,27 +1174,41 @@ This session defines the **complete data contract** between Blazor UI (C#) and R
 
 ## Total Estimated Effort
 
-**7 sessions total** (Scoped comprehensively):
+**7 sessions total** (Adjusted after Session 4 scope change):
 
-1. Session 1: ~60K (Shared Rust Core)
-2. Session 2: ~120K (Tauri Backend)
-3. Session 3: ~90K (Blazor Frontend Scaffold)
-4. Session 4: ~140K (Data Models & gRPC Service Infrastructure) ← EXPANDED
-5. Session 4.5: ~150K (App State & gRPC Service Implementation) ← EXPANDED
+1. Session 1: ~60K (Shared Rust Core) ✅ Complete
+2. Session 2: ~120K (Tauri Backend) ✅ Complete
+3. Session 3: ~90K (Blazor Frontend Scaffold) ✅ Complete
+4. Session 4: ~60K (Data Models Documentation) ✅ Complete (was 140K implementation, became 60K documentation)
+5. Session 4.5: ~170K (Protobuf Creation + gRPC Implementation) ⏳ Next (was 150K, increased to include proto file creation)
 6. Session 5: ~100K (Auth & Settings)
 7. Session 6: ~80K (Polish & Testing)
 
-**Total: ~740K tokens** (increased from 680K as scope clarified)
+**Total: ~680K tokens** (unchanged from original estimate, but work redistributed)
 
 **Timeline Estimate:** 8-10 weeks (1 session per week, with buffer for discoveries)
 
-**Note:** Sessions 4 & 4.5 expanded significantly after review of opencode-egui client (submodules/opencode-egui/) revealed:
+**Scope Evolution:**
 
-- Tab/session management complexity
-- Agent selection per tab
-- Provider status and auth mode switching
-- Version tracking requirements
+- **Original Session 4 plan:** Write `.proto` files + stub services (140K tokens)
+- **Actual Session 4 work:** Create 72+ JSON schemas + 4,400 lines documentation (60K tokens) ✅
+- **Updated Session 4.5 plan:** Create `.proto` from docs + full implementation (170K tokens) ⏳
+
+**Why this is better:**
+
+- **JSON Schema as canonical source** - Matches OpenCode server exactly (72+ types discovered, not 40+)
+- **Automated validation** - Generator prevents drift between TypeScript ↔ JSON Schema ↔ Protobuf
+- **Documentation-first** - All types documented before implementation reduces rework
+- **Session 4.5 faster** - Copy from docs vs. discovery (well-defined types reduce implementation surprises)
+- **Overall budget unchanged** - Session 4 used 80K fewer tokens, Session 4.5 gets 20K more (net same ~680K)
+
+**Token Budget Reallocation:**
+
+```
+Original:  S4 (140K) + S4.5 (150K) = 290K
+Actual:    S4 (60K)  + S4.5 (170K) = 230K (60K saved for future sessions)
+```
 
 ---
 
-**Last Updated:** 2026-01-04
+**Last Updated:** 2026-01-05
