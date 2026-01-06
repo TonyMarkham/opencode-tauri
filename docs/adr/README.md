@@ -33,8 +33,9 @@ These are **absolute requirements** that apply to ALL architecture decisions:
 
 | Number | Title | Status | Date | Summary |
 |--------|-------|--------|------|---------|
-| [0001](./0001-tauri-blazor-desktop-client.md) | Tauri + Blazor WebAssembly Desktop Client | Accepted | 2026-01-02 | Decision to build desktop client using Tauri (Rust) + Blazor WASM (C#) with gRPC for IPC |
+| [0001](./0001-tauri-blazor-desktop-client.md) | Tauri + Blazor WebAssembly Desktop Client | Accepted | 2026-01-02 | Decision to build desktop client using Tauri (Rust) + Blazor WASM (C#) |
 | [0002](./0002-thin-tauri-layer-principle.md) | Thin Tauri Layer Principle | Accepted | 2026-01-05 | Architectural principle: Tauri is ONLY for webview hosting, all logic lives in client-core |
+| [0003](./0003-websocket-protobuf-ipc.md) | WebSocket + Protobuf IPC | Accepted | 2026-01-05 | Blazor ↔ client-core communication via binary WebSocket with protobuf messages |
 
 ---
 
@@ -69,7 +70,7 @@ These are **absolute requirements** that apply to ALL architecture decisions:
 
 **Why:** Need rich UI with zero custom JavaScript, while maintaining type safety and cross-platform support. Alternative to egui client.
 
-**Decision:** Use Tauri (Rust webview host) + Blazor WASM (C# UI framework) + gRPC (type-safe IPC).
+**Decision:** Use Tauri (Rust webview host) + Blazor WASM (C# UI framework) + WebSocket/Protobuf (type-safe IPC).
 
 **Key points:**
 - Coexists with egui client (users choose)
@@ -100,6 +101,23 @@ These are **absolute requirements** that apply to ALL architecture decisions:
 
 ---
 
+### ADR-0003: WebSocket + Protobuf IPC
+
+**Why:** Need streaming for LLM token delivery. Tauri invoke doesn't support streaming. gRPC adds HTTP/2 complexity. Browser sandbox limits options.
+
+**Decision:** Binary WebSocket (`ws://127.0.0.1:PORT`) with protobuf message serialization.
+
+**Key points:**
+- Bidirectional streaming (tokens, events, cancellation)
+- No JavaScript (`System.Net.WebSockets.ClientWebSocket` is native C#)
+- Type-safe protobuf schemas shared between C# and Rust
+- Cross-platform (WebSocket works identically everywhere)
+- WebSocket server runs in client-core (per Thin Tauri Layer principle)
+
+**Status:** ✅ Accepted
+
+---
+
 ## Deprecated ADRs
 
 None yet.
@@ -117,7 +135,7 @@ None yet.
 When creating a new ADR:
 
 1. **Copy the template:** Use [template.md](./template.md) as starting point
-2. **Number it sequentially** (next available number: 0003)
+2. **Number it sequentially** (next available number: 0004)
 3. **Be specific** about context, decision, and consequences
 4. **Document alternatives** considered and why rejected
 5. **Check universal constraints** (Zero Custom JavaScript, Thin Tauri Layer)
@@ -161,3 +179,4 @@ Use [template.md](./template.md) when creating new ADRs. The template includes:
 
 - **2026-01-02:** ADR-0001 created (Tauri + Blazor decision)
 - **2026-01-05:** ADR-0002 created (Thin Tauri Layer principle)
+- **2026-01-05:** ADR-0003 created (WebSocket + Protobuf IPC - replaces gRPC plan)

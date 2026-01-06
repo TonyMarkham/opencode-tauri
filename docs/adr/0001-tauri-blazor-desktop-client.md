@@ -88,13 +88,15 @@ Research confirms Tauri + Blazor WASM is a proven combination:
 - **Frontend**: Blazor WebAssembly 8.0+ (.NET 8+)
 - **Desktop framework**: Tauri v2 (Rust backend)
 - **UI components**: Radzen Blazor components (based on research examples)
-- **Server communication**:
-  - Tauri commands for server discovery/process management
-  - Direct HTTP from Blazor for API calls (similar to egui)
+- **IPC (Blazor ↔ client-core)**: WebSocket + Protobuf (see [ADR-0003](./0003-websocket-protobuf-ipc.md))
+  - Binary WebSocket on `ws://127.0.0.1:PORT`
+  - Protobuf message serialization
+  - Bidirectional streaming for LLM token delivery
+  - No JavaScript required (`System.Net.WebSockets.ClientWebSocket` is native C#)
 - **Build integration**: Separate build from existing `packages/tauri`, no conflict with SolidJS version
 - **JavaScript policy**:
   - **ZERO custom JavaScript files**
-  - All Tauri IPC via C# `IJSRuntime.InvokeAsync` calling Blazor-generated JS
+  - WebSocket IPC avoids Tauri invoke (which requires JSInterop)
   - Blazor handles all DOM interaction natively
   - No `wwwroot/js/` directory with custom scripts
 
@@ -578,7 +580,7 @@ This ADR has been **accepted** and is actively being implemented across 6 sessio
 | 2 | ✅ Complete | Tauri Backend & Server Commands |
 | 3 | ✅ Complete | Blazor Frontend Scaffold & Server Integration |
 | 4 | ✅ Complete | Data Models Documentation (72+ JSON Schemas) |
-| 4.5 | ⏳ Next | Protobuf & gRPC Service Implementation |
+| 4.5 | ⏳ Next | Protobuf & WebSocket Service Implementation (see [ADR-0003](./0003-websocket-protobuf-ipc.md)) |
 | 5 | ⏳ Pending | Authentication & Settings |
 | 6 | ⏳ Pending | Polish, Testing & Documentation |
 
@@ -600,6 +602,7 @@ This client has been extracted into its own repository:
 ### Related ADRs
 
 - [ADR-0002: Thin Tauri Layer Principle](./0002-thin-tauri-layer-principle.md) - Separation of concerns (Tauri vs client-core)
+- [ADR-0003: WebSocket + Protobuf IPC](./0003-websocket-protobuf-ipc.md) - Communication layer between Blazor and client-core (supersedes original gRPC plan)
 
 ### References
 

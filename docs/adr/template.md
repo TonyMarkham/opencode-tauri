@@ -20,6 +20,8 @@ What is the issue we're addressing? What constraints exist? What requirements dr
 
 - **Thin Tauri Layer Principle** ([ADR-0002](./0002-thin-tauri-layer-principle.md)): Tauri is ONLY for webview hosting. All application logic lives in `client-core`. Ask: "Is this webview hosting? No? → client-core"
 
+- **WebSocket + Protobuf IPC** ([ADR-0003](./0003-websocket-protobuf-ipc.md)): Blazor ↔ client-core communication uses binary WebSocket with protobuf messages. No gRPC, no Tauri invoke for data operations.
+
 ## Decision
 
 What are we doing? Be specific about interfaces, boundaries, and responsibilities.

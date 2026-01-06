@@ -6,6 +6,36 @@
 
 ---
 
+## IPC Architecture (ADR-0003)
+
+**Communication:** WebSocket + Protobuf (not gRPC)
+
+```
+Blazor WASM (C#)
+    ↓ System.Net.WebSockets.ClientWebSocket
+    ↓ Binary protobuf frames
+WebSocket (ws://127.0.0.1:PORT)
+    ↓ tokio-tungstenite + prost
+client-core (Rust)
+    ↓ reqwest HTTP
+OpenCode Server
+```
+
+**Why WebSocket instead of gRPC:**
+- Blazor WASM runs in browser sandbox (can't use native IPC)
+- Streaming required for LLM token delivery (Tauri invoke doesn't stream)
+- No JavaScript needed (`ClientWebSocket` is native C#)
+- Simpler than gRPC (no HTTP/2 framing overhead)
+
+**Key principles:**
+- Blazor is "dumb glass" - renders tokens, never interprets domain logic
+- One WebSocket = one session (open on start, close on exit)
+- Binary-only protocol (no JSON, no text frames)
+
+**See:** [ADR-0003: WebSocket + Protobuf IPC](docs/adr/0003-websocket-protobuf-ipc.md)
+
+---
+
 ## Philosophy
 
 Each session delivers a **demonstrable feature** that can be tested and shown to users.
@@ -55,7 +85,107 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 
 ## Session Breakdown
 
-### Session 4.5: "Server Discovery + Basic Chat" ⭐⭐⭐
+### Session 4A: "WebSocket + Proto Foundation" ⭐⭐⭐
+
+**User-facing goal:** None - this is pure infrastructure.
+
+**What you build:**
+- WebSocket server in client-core (Rust)
+- Protobuf message envelope (ClientMessage/ServerMessage)
+- Core proto messages (session, agent, provider, auth)
+- C# WebSocket client service
+- Smoke test page
+
+**Technical scope:**
+1. **WebSocket Server** (client-core):
+   - `tokio-tungstenite` for async WebSocket
+   - Bind to `127.0.0.1:PORT` only (security)
+   - Auth token handshake on connect
+   - Binary frames only (protobuf)
+   
+2. **Proto Messages** (from `docs/proto/*.md`):
+   - `ClientMessage` envelope with `request_id` + `oneof payload`
+   - `ServerMessage` envelope with `request_id` + `oneof payload`
+   - Session operations: `ListSessions`, `CreateSession`, `DeleteSession`
+   - Agent operations: `ListAgents`
+   - Provider operations: `GetProviderStatus`
+   - Auth operations: `SetAuth`, `GetAuth`
+   
+3. **Rust Message Handlers** (HTTP bridges):
+   - `handle_list_sessions` → `GET /session`
+   - `handle_create_session` → `POST /session`
+   - `handle_list_agents` → `GET /agent`
+   - `handle_get_provider_status` → `GET /provider`
+   
+4. **C# WebSocket Client**:
+   - `WebSocketService` - connection management, send/receive
+   - `IOpenCodeClient` - typed wrapper for operations
+   - Protobuf serialization via `Google.Protobuf`
+   - Configure DI in `Program.cs`
+
+**Token estimate:** ~80K
+
+**Success criteria:**
+- [ ] WebSocket server starts on app launch
+- [ ] C# client connects via `ClientWebSocket`
+- [ ] Auth handshake succeeds
+- [ ] Can list sessions (round-trip works)
+- [ ] Can list agents (round-trip works)
+- [ ] Smoke test shows ✅ for all operations
+
+---
+
+### Session 4B: "Streaming + Messages" ⭐⭐⭐
+
+**User-facing goal:** None - this is pure infrastructure.
+
+**What you build:**
+- Bidirectional streaming over WebSocket
+- Message operations (send, receive, cancel)
+- SSE → WebSocket event translation
+- Tool call proto messages
+
+**Technical scope:**
+1. **Streaming Proto Messages**:
+   - `ChatToken` - Single token from LLM
+   - `ChatCompleted` - Stream finished
+   - `ChatError` - Error during streaming
+   - `CancelRequest` - Cancel active stream
+   - `ToolCallEvent` - Tool execution update
+   
+2. **Message Operations**:
+   - `SendMessageRequest` → `POST /session/{id}/message`
+   - `GetMessagesRequest` → `GET /session/{id}/message`
+   - `AbortSessionRequest` → `POST /session/{id}/abort`
+   
+3. **SSE → WebSocket Bridge** (client-core):
+   - Subscribe to OpenCode SSE: `GET /event`
+   - Parse SSE events (message.updated, message.part.updated, etc.)
+   - Convert to protobuf `ServerMessage`
+   - Push to WebSocket as binary frames
+   - Handle reconnection on SSE disconnect
+   
+4. **C# Event Handling**:
+   - `EventStreamService` - Background service
+   - Receives `ServerMessage` from WebSocket
+   - Dispatches to Fluxor store
+   - Token-by-token UI updates
+
+**Token estimate:** ~70K
+
+**Success criteria:**
+- [ ] Can send message and receive streaming tokens
+- [ ] Tokens appear one-by-one (not batched)
+- [ ] Can cancel active stream
+- [ ] Tool call events received
+- [ ] SSE reconnection works
+
+**Why this matters:**
+Completes the communication layer. Sessions 5+ just wire UI to these messages!
+
+---
+
+### Session 5: "Server Discovery + Basic Chat" ⭐⭐⭐
 
 **User-facing goal:** Launch app, auto-discover server (or spawn), send a message, see a response.
 
@@ -64,14 +194,14 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 - Server discovered/spawned automatically  
 - Type message in input box
 - Click send (or Cmd+Enter)
-- See assistant response appear (text only)
+- See assistant response appear (text only, streaming)
 - See basic tool execution (no permission yet)
 
 **Technical scope:**
-1. **gRPC Services** (proto definitions + code gen):
-   - `ServerDiscovery` (find/spawn server)
-   - `SessionManagement` (create/list/delete sessions)
-   - `MessageService` (send message, stream events)
+1. **Use WebSocket services from Session 4:**
+   - Session operations (already implemented!)
+   - Message operations (already implemented!)
+   - Event streaming (already implemented!)
 
 2. **Blazor Components**:
    - `MainLayout.razor` - App shell with status bar
@@ -80,20 +210,21 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
    - `ToolCallBlock.razor` - Basic collapsible tool display (no permissions yet)
 
 3. **State Management** (Fluxor):
-   - `AppState` - Server info, single tab state
+   - `AppState` - Server info, WebSocket status, single tab state
    - `TabState` - Messages, input, session ID
    - `DisplayMessage` - Message data (role, text, tool_calls)
    - `ToolCall` - Tool execution data (id, name, status, input, output)
 
-4. **Server Discovery** (C# port of egui logic):
-   - Try ports 4008-4018 with HTTP health check (`GET /doc`)
-   - Spawn `opencode server` if not found
-   - Wait for ready (health check in loop)
+4. **Server Discovery** (existing Tauri commands):
+   - Use existing `discover_server` / `spawn_server` commands
+   - Get WebSocket port from Tauri (one-time call)
+   - Connect WebSocket on startup
 
-5. **Event Streaming** (gRPC server-side streaming):
-   - Subscribe to `GlobalEvents` stream
-   - Route events by type: `message.updated`, `message.part.updated`
+5. **Event Handling** (WebSocket streaming):
+   - Receive `ServerMessage` from WebSocket
+   - Route by payload type: `ChatToken`, `ToolCallEvent`, etc.
    - Update state via Fluxor actions
+   - Tokens append to message text incrementally
 
 **Out of scope:**
 - Multi-tab (Session 5)
@@ -112,7 +243,7 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 
 ---
 
-### Session 5: "Multi-Tab + Agent Selection" ⭐⭐
+### Session 6: "Multi-Tab + Agent Selection" ⭐⭐
 
 **User-facing goal:** Open multiple chat tabs, switch between them, select different agent per tab.
 
@@ -133,7 +264,7 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 
 2. **Agent System**:
    - `AgentPane.razor` - Left sidebar with agent list
-   - Fetch agents via `GET /agent` (convert to gRPC)
+   - Fetch agents via WebSocket `ListAgents` (already implemented!)
    - Filter by mode (hide subagents by default)
    - Per-tab agent selection
    - Send agent with message: `agent: "build"`
@@ -144,9 +275,9 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
    - Route events to correct tab by `sessionID`
 
 **Out of scope:**
-- Model selection (Session 6)
-- Permissions (Session 6)
-- Tab rename (Session 8)
+- Model selection (Session 7)
+- Permissions (Session 7)
+- Tab rename (Session 9)
 
 **Token estimate:** ~100K
 
@@ -159,7 +290,7 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 
 ---
 
-### Session 6: "Tool Calls + Permissions" ⭐⭐⭐
+### Session 7: "Tool Calls + Permissions" ⭐⭐⭐
 
 **User-facing goal:** See tool execution in real-time, approve permission requests.
 
@@ -208,8 +339,8 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
    - Find tool by `id` OR `call_id` (need dual index)
 
 **Out of scope:**
-- Markdown rendering (Session 8)
-- Model selection (deferred to Session 7)
+- Markdown rendering (Session 9)
+- Model selection (Session 8)
 
 **Token estimate:** ~110K
 
@@ -224,7 +355,7 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 
 ---
 
-### Session 7: "Model Selection + Provider Status" ⭐⭐
+### Session 8: "Model Selection + Provider Status" ⭐⭐
 
 **User-facing goal:** Change model/provider per session, see provider connection status.
 
@@ -285,7 +416,7 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 
 ---
 
-### Session 8: "Markdown + Full UX Parity" ⭐⭐⭐
+### Session 9: "Markdown + Full UX Parity" ⭐⭐⭐
 
 **User-facing goal:** Beautiful message rendering + complete egui feature parity.
 
@@ -392,20 +523,27 @@ Based on comprehensive audit of egui client (see `EGUI_FEATURE_AUDIT.md`):
 
 | Session | Feature | Estimate | Running Total |
 |---------|---------|----------|---------------|
-| 4.5 | Server + Basic Chat | 120K | 120K |
-| 5 | Multi-Tab + Agents | 100K | 220K |
-| 6 | Tool Calls + Permissions | 110K | 330K |
-| 7 | Model Selection + Discovery + Auth | **120K** | 450K |
-| 8 | Markdown + **Full UX Parity** | **100K** | **550K** |
-| 9 | Audio/STT | 80K | 630K |
+| 4A | **WebSocket + Proto Foundation** | **80K** | 80K |
+| 4B | **Streaming + Messages** | **70K** | 150K |
+| 5 | Server + Basic Chat | 120K | 270K |
+| 6 | Multi-Tab + Agents | 100K | 370K |
+| 7 | Tool Calls + Permissions | 110K | 480K |
+| 8 | Model Selection + Auth | 90K | 570K |
+| 9 | Markdown + **Full UX Parity** | 100K | 670K |
+| 10 | Audio/STT | 80K | **750K** |
 
-**Full Feature Parity: ~630K tokens**
+**Full Feature Parity: ~750K tokens**
 
 **Goal:** Match egui reference implementation feature-for-feature
 
+**Why Sessions 4A & 4B?**
+- 4A: WebSocket server + core proto messages (80K)
+- 4B: Streaming + SSE bridge (70K)
+- Sessions 5-10: Just UI wiring to existing WebSocket services
+
 ---
 
-### Session 9: "Audio/STT Integration" ⭐⭐
+### Session 10: "Audio/STT Integration" ⭐⭐
 
 **User-facing goal:** Hands-free input via push-to-talk audio transcription.
 
@@ -533,35 +671,40 @@ public class AppReducers
 }
 ```
 
-### Event Streaming Pattern
+### Event Streaming Pattern (WebSocket)
 
 ```csharp
-public class EventStreamService : BackgroundService
+public class WebSocketEventService : BackgroundService
 {
     private readonly IDispatcher _dispatcher;
-    private readonly GrpcChannel _channel;
+    private readonly WebSocketService _webSocket;
     
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var client = new EventService.EventServiceClient(_channel);
+        // WebSocket already connected by app startup
+        _webSocket.OnMessageReceived += HandleMessage;
         
-        var stream = client.SubscribeGlobalEvents(new Empty(), cancellationToken: stoppingToken);
-        
-        await foreach (var evt in stream.ResponseStream.ReadAllAsync(stoppingToken))
+        // Keep alive until cancelled
+        await Task.Delay(Timeout.Infinite, stoppingToken);
+    }
+    
+    private void HandleMessage(ServerMessage msg)
+    {
+        // Route by payload type (protobuf oneof)
+        switch (msg.PayloadCase)
         {
-            // Route by event type
-            switch (evt.Type)
-            {
-                case "message.updated":
-                    _dispatcher.Dispatch(new MessageUpdatedAction(evt));
-                    break;
-                case "message.part.updated":
-                    _dispatcher.Dispatch(new MessagePartUpdatedAction(evt));
-                    break;
-                case "permission.updated":
-                    _dispatcher.Dispatch(new PermissionUpdatedAction(evt));
-                    break;
-            }
+            case ServerMessage.PayloadOneofCase.Token:
+                _dispatcher.Dispatch(new TokenReceivedAction(msg.RequestId, msg.Token));
+                break;
+            case ServerMessage.PayloadOneofCase.Completed:
+                _dispatcher.Dispatch(new StreamCompletedAction(msg.RequestId));
+                break;
+            case ServerMessage.PayloadOneofCase.ToolCall:
+                _dispatcher.Dispatch(new ToolCallUpdatedAction(msg.ToolCall));
+                break;
+            case ServerMessage.PayloadOneofCase.Error:
+                _dispatcher.Dispatch(new ErrorReceivedAction(msg.RequestId, msg.Error));
+                break;
         }
     }
 }
@@ -590,6 +733,62 @@ public class ToolCallIndex
         if (callId != null && _byCallId.TryGetValue(callId, out tool))
             return tool;
         return null;
+    }
+}
+```
+
+### WebSocket Client Service
+
+```csharp
+public class WebSocketService : IAsyncDisposable
+{
+    private readonly ClientWebSocket _socket = new();
+    private ulong _nextRequestId = 1;
+    
+    public event Action<ServerMessage>? OnMessageReceived;
+    
+    public async Task ConnectAsync(string url, string authToken)
+    {
+        await _socket.ConnectAsync(new Uri(url), CancellationToken.None);
+        
+        // Send auth handshake
+        var handshake = new ClientMessage 
+        { 
+            RequestId = _nextRequestId++,
+            Auth = new AuthHandshake { Token = authToken }
+        };
+        await SendAsync(handshake);
+        
+        // Start receive loop
+        _ = ReceiveLoopAsync();
+    }
+    
+    public async Task<ulong> SendAsync(ClientMessage message)
+    {
+        message.RequestId = _nextRequestId++;
+        var bytes = message.ToByteArray();
+        await _socket.SendAsync(bytes, WebSocketMessageType.Binary, true, CancellationToken.None);
+        return message.RequestId;
+    }
+    
+    private async Task ReceiveLoopAsync()
+    {
+        var buffer = new byte[8192];
+        while (_socket.State == WebSocketState.Open)
+        {
+            var result = await _socket.ReceiveAsync(buffer, CancellationToken.None);
+            if (result.MessageType == WebSocketMessageType.Binary)
+            {
+                var msg = ServerMessage.Parser.ParseFrom(buffer, 0, result.Count);
+                OnMessageReceived?.Invoke(msg);
+            }
+        }
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+        _socket.Dispose();
     }
 }
 ```
