@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 log = { workspace = true }
 fern = { workspace = true }
 humantime = { workspace = true }
+uuid = { workspace = true }
 
 # Workspace dependencies
 client-core = { workspace = true }

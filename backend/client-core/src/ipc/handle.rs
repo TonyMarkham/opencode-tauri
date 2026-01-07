@@ -13,20 +13,6 @@
 /// Currently, dropping this handle does **not** stop the server. The server runs until
 /// the process exits. Future versions will implement graceful shutdown via `Drop`.
 ///
-/// # Examples
-///
-/// ```no_run
-/// use client_core::ipc::start_ipc_server;
-///
-/// #[tokio::main]
-/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let handle = start_ipc_server(19876).await?;
-///     // Server is now running in background
-///     // Keep handle alive to keep server running
-///     Ok(())
-/// }
-/// ```
-///
 /// # Future Enhancements
 ///
 /// - Graceful shutdown on drop

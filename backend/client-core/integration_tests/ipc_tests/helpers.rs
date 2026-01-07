@@ -18,7 +18,6 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungsten
 
 /// Test constants for authentication
 pub const TEST_AUTH_TOKEN: &str = "test-token-12345";
-pub const INVALID_AUTH_TOKEN: &str = "wrong-token";
 
 /// Test helper: Connect to IPC server and return WebSocket stream.
 pub async fn connect_to_server(ipc_port: u16) -> WebSocketStream<MaybeTlsStream<TcpStream>> {

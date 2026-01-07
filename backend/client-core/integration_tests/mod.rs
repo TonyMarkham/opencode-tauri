@@ -1,3 +1,3 @@
 mod discovery;
 mod error;
-mod ipc;
+mod ipc_tests;

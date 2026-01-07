@@ -31,9 +31,4 @@ impl ConnectionState {
             false
         }
     }
-
-    /// Check if connection is authenticated.
-    pub(crate) fn is_authenticated(&self) -> bool {
-        self.authenticated
-    }
 }

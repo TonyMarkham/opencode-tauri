@@ -16,7 +16,7 @@ fn given_valid_process_when_format_command_called_then_returns_command_string() 
     let our_pid = std::process::id();
 
     // WHEN: Calling format_command on the process
-    let result = with_process(our_pid, |p| format_command(p));
+    let result = with_process(our_pid, format_command);
 
     // THEN: Should return Some with non-empty command string
     assert!(result.is_some(), "Should find the process");

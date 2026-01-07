@@ -28,14 +28,11 @@ use crate::error::ipc::IpcError;
 use crate::ipc::connection_state::ConnectionState;
 use crate::ipc::handle::IpcServerHandle;
 use crate::ipc::state::{IpcState, StateCommand};
-use crate::proto::IpcErrorCode::{
-    AuthError, InternalError, InvalidMessage, NoServer, NotImplemented, ServerError, Unknown,
-};
+use crate::proto::IpcErrorCode::{AuthError, InternalError, InvalidMessage, NotImplemented};
 use crate::proto::{
-    IpcAuthHandshakeResponse, IpcCheckHealthRequest, IpcCheckHealthResponse, IpcClientMessage,
-    IpcDiscoverServerRequest, IpcDiscoverServerResponse, IpcErrorCode, IpcErrorResponse,
-    IpcServerMessage, IpcSpawnServerRequest, IpcSpawnServerResponse, IpcStopServerRequest,
-    IpcStopServerResponse, ipc_client_message, ipc_server_message,
+    IpcAuthHandshakeResponse, IpcCheckHealthResponse, IpcClientMessage, IpcDiscoverServerResponse,
+    IpcErrorCode, IpcErrorResponse, IpcServerMessage, IpcSpawnServerRequest,
+    IpcSpawnServerResponse, IpcStopServerResponse, ipc_client_message, ipc_server_message,
 };
 
 use common::ErrorLocation;
@@ -408,10 +405,10 @@ async fn handle_message(
 
     match payload {
         // Server Management - Call real handlers
-        Payload::DiscoverServer(req) => handle_discover_server(state, request_id, write).await,
-        Payload::SpawnServer(req) => handle_spawn_server(state, request_id, req, write).await,
-        Payload::CheckHealth(req) => handle_check_health(state, request_id, write).await,
-        Payload::StopServer(req) => handle_stop_server(state, request_id, write).await,
+        Payload::DiscoverServer(_req) => handle_discover_server(state, request_id, write).await,
+        Payload::SpawnServer(_req) => handle_spawn_server(state, request_id, _req, write).await,
+        Payload::CheckHealth(_req) => handle_check_health(state, request_id, write).await,
+        Payload::StopServer(_req) => handle_stop_server(state, request_id, write).await,
 
         // Sessions (stub)
         Payload::ListSessions(_) => {

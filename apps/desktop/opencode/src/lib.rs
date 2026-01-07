@@ -3,6 +3,7 @@
 
 pub mod commands;
 pub mod error;
+pub mod ipc_config;
 pub mod logger;
 pub mod state;
 

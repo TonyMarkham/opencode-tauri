@@ -3,8 +3,11 @@
 
 use opencode::commands;
 use opencode::error::OpencodeError;
+use opencode::ipc_config::IpcConfig;
 use opencode::logger::initialize as LoggerInitialize;
 use opencode::state::AppState;
+
+use client_core::ipc::start_ipc_server;
 
 use common::ErrorLocation;
 
@@ -13,6 +16,7 @@ use std::panic::Location;
 
 use log::info;
 use tauri::Manager;
+use uuid::Uuid;
 
 fn main() {
     tauri::Builder::default()
@@ -28,7 +32,7 @@ fn main() {
                 .path()
                 .app_log_dir()
                 .map_err(|e| OpencodeError::Opencode {
-                    message: format!("Failed to get log directory: {}", e),
+                    message: format!("Failed to get log directory: {e}"),
                     location: ErrorLocation::from(Location::caller()),
                 })?;
 
@@ -46,6 +50,29 @@ fn main() {
 
             // Initialize AppState AFTER Tauri runtime is running
             app.manage(AppState::default());
+
+            // Start IPC WebSocket server
+            let ipc_port = 19876;
+            let auth_token = Uuid::new_v4().to_string();
+
+            info!("Starting IPC server on port {ipc_port}");
+            info!("IPC auth token: {auth_token}");
+
+            let token_clone = auth_token.clone();
+
+            // Start IPC server and verify it binds successfully
+            let rt = tokio::runtime::Handle::current();
+            let _ipc_handle = rt
+                .block_on(async { start_ipc_server(ipc_port, Some(token_clone)).await })
+                .map_err(|e| OpencodeError::Opencode {
+                    message: format!("Failed to start IPC server: {}", e),
+                    location: ErrorLocation::from(Location::caller()),
+                })?;
+
+            info!("IPC server started successfully");
+
+            // Store IPC config for Blazor to retrieve
+            app.manage(IpcConfig::new(ipc_port, auth_token));
 
             Ok(())
         })
