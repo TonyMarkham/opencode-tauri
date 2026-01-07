@@ -24,7 +24,7 @@
 
 ---
 
-## Completed Sessions (1-4)
+## Completed Sessions (1-5)
 
 | Session | Deliverable | Status |
 |---------|-------------|--------|
@@ -32,8 +32,9 @@
 | 2 | Tauri app shell + server commands | DONE |
 | 3 | Blazor scaffold + server status UI | DONE |
 | 4 | Proto documentation (72+ JSON schemas) | DONE |
+| 5 | IPC Server - Echo (WebSocket, text/binary echo) | DONE |
 
-**Current state:** App launches, discovers/spawns server, shows status page.
+**Current state:** App launches, discovers/spawns server, shows status page. IPC echo server works (needs cleanup folded into Session 6).
 
 ---
 

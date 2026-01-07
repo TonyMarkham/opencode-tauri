@@ -1,9 +1,9 @@
 use crate::discovery::get_override_port;
 use crate::error::discovery::DiscoveryError;
+use crate::proto::IpcServerInfo;
 use crate::{OPENCODE_BINARY, OPENCODE_SERVER_BASE_URL};
 
-use models::error::error_location::ErrorLocation;
-use models::{ServerInfo, ServerInfoBuilder};
+use common::ErrorLocation;
 
 use std::panic::Location;
 use std::thread::sleep;
@@ -35,7 +35,7 @@ fn query_tcp_sockets() -> Result<Vec<SocketInfo>, DiscoveryError> {
 }
 
 #[track_caller]
-fn discover_on_port(port: u16) -> Result<Option<ServerInfo>, DiscoveryError> {
+fn discover_on_port(port: u16) -> Result<Option<IpcServerInfo>, DiscoveryError> {
     let sockets = query_tcp_sockets()?;
 
     for s in sockets {
@@ -55,14 +55,14 @@ fn discover_on_port(port: u16) -> Result<Option<ServerInfo>, DiscoveryError> {
 
                 debug!("Discovered server: {name} (PID: {pid})");
 
-                let server_info = ServerInfoBuilder::default()
-                    .with_pid(pid)
-                    .with_port(port)
-                    .with_base_url(base_url)
-                    .with_name(OPENCODE_BINARY)
-                    .with_command(format!("{OPENCODE_BINARY} {command}"))
-                    .with_owned(true)
-                    .build()?;
+                let server_info = IpcServerInfo {
+                    pid,
+                    port: port as u32,
+                    base_url,
+                    name: OPENCODE_BINARY.to_string(),
+                    command: format!("{OPENCODE_BINARY} {command}"),
+                    owned: true,
+                };
 
                 return Ok(Some(server_info));
             }
@@ -92,7 +92,7 @@ fn find_listening_port(pid: u32) -> Result<Option<u16>, DiscoveryError> {
 }
 
 #[track_caller]
-fn discover_by_process_scan() -> Result<Option<ServerInfo>, DiscoveryError> {
+fn discover_by_process_scan() -> Result<Option<IpcServerInfo>, DiscoveryError> {
     let mut sys = System::new_all();
     sys.refresh_processes(ProcessesToUpdate::All, true);
 
@@ -118,14 +118,14 @@ fn discover_by_process_scan() -> Result<Option<ServerInfo>, DiscoveryError> {
 
             debug!("Discovered server: {name} on port {port} (PID: {pid_u32})");
 
-            let server_info = ServerInfoBuilder::default()
-                .with_pid(pid_u32)
-                .with_port(port)
-                .with_base_url(base_url)
-                .with_name(OPENCODE_BINARY)
-                .with_command(format!("{OPENCODE_BINARY} {command}"))
-                .with_owned(true)
-                .build()?;
+            let server_info = IpcServerInfo {
+                pid: pid_u32,
+                port: port as u32,
+                base_url,
+                name: OPENCODE_BINARY.to_string(),
+                command: format!("{OPENCODE_BINARY} {command}"),
+                owned: true,
+            };
 
             return Ok(Some(server_info));
         }
@@ -176,7 +176,7 @@ pub(crate) fn format_command(process: &Process) -> String {
 /// * `Ok(None)` - If no server is running
 /// * `Err(DiscoveryError)` - If process/network queries fail
 #[track_caller]
-pub fn discover() -> Result<Option<ServerInfo>, DiscoveryError> {
+pub fn discover() -> Result<Option<IpcServerInfo>, DiscoveryError> {
     debug!("Starting server discovery");
 
     if let Some(override_port) = get_override_port() {

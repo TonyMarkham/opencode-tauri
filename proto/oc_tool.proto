@@ -1,0 +1,108 @@
+syntax = "proto3";
+package opencode.tool;
+
+import "google/protobuf/struct.proto";
+
+// ============================================
+// TOOL STATE (Lifecycle State Machine)
+// ============================================
+
+// Tool state discriminated union
+// Source: submodules/opencode/schema/toolState.schema.json (canonical)
+// Verified: 2026-01-07 - oneOf with 4 variants (status discriminator)
+message OcToolState {
+  oneof state {
+    OcToolStatePending pending = 1;
+    OcToolStateRunning running = 2;
+    OcToolStateCompleted completed = 3;
+    OcToolStateError error = 4;
+  }
+}
+
+// Pending tool state (waiting to execute)
+// Source: submodules/opencode/schema/toolStatePending.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcToolStatePending {
+  string status = 1;                // const: "pending" (discriminator)
+  google.protobuf.Struct input = 2; // Tool input parameters (required)
+  string raw = 3;                   // Raw input string (required)
+}
+
+// Running tool state (currently executing)
+// Source: submodules/opencode/schema/toolStateRunning.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (status, input, time required; title, metadata optional)
+message OcToolStateRunning {
+  string status = 1;                          // const: "running" (discriminator)
+  google.protobuf.Struct input = 2;           // Tool input parameters (required)
+  optional string title = 3;                  // Display title for UI
+  optional google.protobuf.Struct metadata = 4; // Additional metadata (e.g., progress)
+  OcToolTime time = 5;                        // Timing (start only) (required)
+}
+
+// Completed tool state (successfully finished)
+// Source: submodules/opencode/schema/toolStateCompleted.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (all required)
+message OcToolStateCompleted {
+  string status = 1;                        // const: "completed" (discriminator)
+  google.protobuf.Struct input = 2;         // Tool input parameters (required)
+  string output = 3;                        // Tool output result (required)
+  string title = 4;                         // Display title (required)
+  google.protobuf.Struct metadata = 5;      // Additional metadata (required)
+  OcToolTimeWithEnd time = 6;               // Timing (start + end) (required)
+}
+
+// Error tool state (failed execution)
+// Source: submodules/opencode/schema/toolStateError.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (all required)
+message OcToolStateError {
+  string status = 1;                        // const: "error" (discriminator)
+  google.protobuf.Struct input = 2;         // Tool input parameters (required)
+  string error = 3;                         // Error message (required)
+  string title = 4;                         // Display title (required)
+  google.protobuf.Struct metadata = 5;      // Additional metadata (required)
+  OcToolTimeWithEnd time = 6;               // Timing (start + end) (required)
+}
+
+// Tool timing (start only - for running state)
+message OcToolTime {
+  int64 start = 1;  // Unix timestamp in milliseconds when tool started (required)
+}
+
+// Tool timing with end (for completed/error states)
+message OcToolTimeWithEnd {
+  int64 start = 1;  // Unix timestamp in milliseconds when tool started (required)
+  int64 end = 2;    // Unix timestamp in milliseconds when tool finished (required)
+}
+
+// ============================================
+// PERMISSION SYSTEM
+// ============================================
+
+// Permission request (asks user for approval)
+// Source: submodules/opencode/schema/permissionRequest.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcPermissionRequest {
+  string id = 1;                            // Unique permission request ID (required)
+  string permission = 2;                    // Permission type (e.g., "bash", "edit") (required)
+  string action = 3;                        // Human-readable action description (required)
+  OcPermissionToolContext tool = 4;         // Tool context (required)
+  int64 timestamp = 5;                      // Unix timestamp in milliseconds (required)
+}
+
+// Tool context for permission request
+// Source: submodules/opencode/schema/permissionToolContext.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (name required, input optional)
+message OcPermissionToolContext {
+  string name = 1;                          // Tool name (e.g., "bash", "edit") (required)
+  optional google.protobuf.Struct input = 2; // Tool input parameters
+}
+
+// Permission reply (user's decision)
+// Source: submodules/opencode/schema/permissionReply.schema.json (canonical)
+// Verified: 2026-01-07 - enum with 3 values
+enum OcPermissionReply {
+  PERMISSION_REPLY_UNSPECIFIED = 0;
+  ALLOW = 1;      // JSON: "allow"
+  DENY = 2;       // JSON: "deny"
+  ALLOW_ALL = 3;  // JSON: "allow-all" (allow this and all future for this pattern)
+}

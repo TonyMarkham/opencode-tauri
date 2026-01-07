@@ -1,4 +1,5 @@
 pub mod discovery;
+pub mod ipc;
 pub mod spawn;
 pub mod ws;
 

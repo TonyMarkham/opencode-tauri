@@ -1,0 +1,197 @@
+syntax = "proto3";
+package opencode.message.part;
+
+import "oc_tool.proto";
+import "google/protobuf/struct.proto";
+
+// Part discriminated union (13 content types)
+// Source: submodules/opencode/schema/part.schema.json (canonical)
+// Verified: 2026-01-07 - oneOf with 13 variants (type discriminator)
+message OcPart {
+  oneof part {
+    OcTextPart text = 1;
+    OcReasoningPart reasoning = 2;
+    OcToolPart tool = 3;
+    OcFilePart file = 4;
+    OcPatchPart patch = 5;
+    OcSnapshotPart snapshot = 6;
+    OcAgentPart agent = 7;
+    OcCompactionPart compaction = 8;
+    OcSubtaskPart subtask = 9;
+    OcStepStartPart step_start = 10;
+    OcStepFinishPart step_finish = 11;
+    OcRetryPart retry = 12;
+  }
+}
+
+// ============================================
+// BASIC CONTENT PARTS
+// ============================================
+
+// Text content part (plain text)
+// Source: submodules/opencode/schema/textPart.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (5 required, 1 optional)
+message OcTextPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "text" (discriminator)
+  string text = 5;                      // Text content (required)
+  optional bool synthetic = 6;          // Whether this is synthetic/generated text
+}
+
+// Reasoning/thinking content part (chain-of-thought)
+// Source: submodules/opencode/schema/reasoningPart.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (5 required, 1 optional)
+message OcReasoningPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "reasoning" (discriminator)
+  string text = 5;                      // Reasoning text (required)
+  optional string summary = 6;          // Summary of reasoning process
+}
+
+// ============================================
+// TOOL & FILE PARTS
+// ============================================
+
+// Tool call part (function execution)
+// Source: submodules/opencode/schema/toolPart.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (all required)
+message OcToolPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "tool" (discriminator)
+  string name = 5;                      // Tool name (e.g., "bash", "edit", "read") (required)
+  opencode.tool.OcToolState state = 6;  // Tool execution state (required)
+}
+
+// File attachment part (full file content)
+// Source: submodules/opencode/schema/filePart.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (all required)
+message OcFilePart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "file" (discriminator)
+  string path = 5;                      // File path (required)
+  string content = 6;                   // File content (required)
+}
+
+// Patch/diff part (unified diff format)
+// Source: submodules/opencode/schema/patchPart.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (all required)
+message OcPatchPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "patch" (discriminator)
+  string path = 5;                      // File path being patched (required)
+  string diff = 6;                      // Unified diff content (required)
+}
+
+// ============================================
+// REFERENCE PARTS (Links to other entities)
+// ============================================
+
+// Snapshot reference part (link to filesystem snapshot)
+// Source: submodules/opencode/schema/snapshotPart.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcSnapshotPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "snapshot" (discriminator)
+  string snapshot_id = 5;               // Snapshot identifier (required, JSON: snapshotID)
+}
+
+// Agent reference part (subagent invocation)
+// Source: submodules/opencode/schema/agentPart.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcAgentPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "agent" (discriminator)
+  string agent_name = 5;                // Agent name (required, JSON: agentName)
+}
+
+// Subtask reference part (link to subtask session)
+// Source: submodules/opencode/schema/subtaskPart.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcSubtaskPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "subtask" (discriminator)
+  string subtask_id = 5;                // Subtask session ID (required, JSON: subtaskID)
+}
+
+// ============================================
+// SESSION MANAGEMENT PARTS
+// ============================================
+
+// Compaction marker part (history was compacted here)
+// Source: submodules/opencode/schema/compactionPart.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcCompactionPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "compaction" (discriminator)
+  string summary = 5;                   // Compaction summary (required)
+}
+
+// ============================================
+// MULTI-STEP REASONING PARTS
+// ============================================
+
+// Step start marker (beginning of reasoning step)
+// Source: submodules/opencode/schema/stepStartPart.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcStepStartPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "step_start" (discriminator, JSON: "step-start")
+  string title = 5;                     // Step title (required)
+}
+
+// Step finish marker with token/cost tracking
+// Source: submodules/opencode/schema/stepFinishPart.schema.json (canonical)
+// Verified: 2026-01-07 - 7 properties (all required)
+message OcStepFinishPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "step_finish" (discriminator, JSON: "step-finish")
+  string title = 5;                     // Step title (required)
+  OcTokenUsage tokens = 6;              // Token usage for this step (required)
+  double cost = 7;                      // Cost for this step in USD (required)
+}
+
+// Token usage statistics (embedded in step finish)
+// Reused from oc_message.proto structure
+message OcTokenUsage {
+  int32 input = 1;                      // Input tokens consumed (required)
+  int32 output = 2;                     // Output tokens generated (required)
+  optional int32 cache_read = 3;        // Tokens read from cache (JSON: cacheRead)
+  optional int32 cache_write = 4;       // Tokens written to cache (JSON: cacheWrite)
+}
+
+// ============================================
+// ERROR HANDLING PARTS
+// ============================================
+
+// Retry marker (failed attempt with error)
+// Source: submodules/opencode/schema/retryPart.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcRetryPart {
+  string id = 1;                        // Part ID (required)
+  string session_id = 2;                // Session ID (required, JSON: sessionID)
+  string message_id = 3;                // Message ID (required, JSON: messageID)
+  string type = 4;                      // const: "retry" (discriminator)
+  string error = 5;                     // Error message that caused retry (required)
+}

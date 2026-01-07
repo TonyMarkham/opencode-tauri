@@ -15,12 +15,13 @@ log = { workspace = true }
 backoff = { workspace = true }
 const_format = { workspace = true }
 prost = { workspace = true }
+prost-types = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 uuid = { workspace = true }
 url = { workspace = true }
 
-models = { workspace = true }
+common = { workspace = true }
 
 [[test]]
 name = "integration_tests"

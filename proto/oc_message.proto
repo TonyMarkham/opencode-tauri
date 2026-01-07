@@ -1,0 +1,58 @@
+syntax = "proto3";
+package opencode.message;
+
+import "oc_message_part.proto";
+import "oc_message_error.proto";
+
+// Message discriminated union (user or assistant)
+// Source: submodules/opencode/schema/message.schema.json (canonical)
+// Verified: 2026-01-07 - oneOf with 2 variants (role discriminator)
+message OcMessage {
+  oneof message {
+    OcUserMessage user = 1;
+    OcAssistantMessage assistant = 2;
+  }
+}
+
+// User message (sent by human)
+// Source: submodules/opencode/schema/userMessage.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (id, sessionID, role, model, parts required; text optional)
+message OcUserMessage {
+  string id = 1;                                        // Message ID (required)
+  string session_id = 2;                                // Session ID (required, JSON: sessionID)
+  string role = 3;                                      // const: "user" (discriminator)
+  OcModelReference model = 4;                           // Selected model (required)
+  repeated opencode.message.part.OcPart parts = 5;      // Message content parts (required)
+  optional string text = 6;                             // Flattened text for search/display
+}
+
+// Assistant message (sent by AI)
+// Source: submodules/opencode/schema/assistantMessage.schema.json (canonical)
+// Verified: 2026-01-07 - 9 properties (8 required, 1 optional)
+message OcAssistantMessage {
+  string id = 1;                                        // Message ID (required)
+  string session_id = 2;                                // Session ID (required, JSON: sessionID)
+  string role = 3;                                      // const: "assistant" (discriminator)
+  OcModelReference model = 4;                           // Model that generated this (required)
+  repeated opencode.message.part.OcPart parts = 5;      // Message content parts (required)
+  optional string text = 6;                             // Flattened text for search/display
+  OcTokenUsage tokens = 7;                              // Token usage stats (required)
+  double cost = 8;                                      // Cost in USD (required)
+  optional opencode.message.error.OcMessageError error = 9; // Error if message generation failed
+}
+
+// Model reference (lightweight, just IDs)
+// Used to reference a model without embedding full OcModelInfo
+message OcModelReference {
+  string model_id = 1;                                  // "claude-3-5-sonnet-20241022" (required, JSON: modelID)
+  string provider_id = 2;                               // "anthropic" (required, JSON: providerID)
+}
+
+// Token usage statistics
+// Tracks input/output tokens and cache usage
+message OcTokenUsage {
+  int32 input = 1;                                      // Input tokens consumed (required)
+  int32 output = 2;                                     // Output tokens generated (required)
+  optional int32 cache_read = 3;                        // Tokens read from cache (JSON: cacheRead)
+  optional int32 cache_write = 4;                       // Tokens written to cache (JSON: cacheWrite)
+}

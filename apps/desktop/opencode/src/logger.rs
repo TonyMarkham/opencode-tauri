@@ -4,7 +4,7 @@
 
 use crate::error::OpencodeError;
 
-use models::ErrorLocation;
+use common::ErrorLocation;
 
 use std::io::stdout;
 use std::path::Path;

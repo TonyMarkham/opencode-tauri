@@ -1,4 +1,4 @@
-use models::ErrorLocation;
+use common::ErrorLocation;
 
 use serde::Serialize;
 use thiserror::Error;

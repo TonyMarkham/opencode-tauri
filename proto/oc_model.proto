@@ -1,0 +1,228 @@
+syntax = "proto3";
+package opencode.model;
+
+import "google/protobuf/struct.proto";
+
+// ============================================
+// CORE MODEL METADATA
+// ============================================
+
+// Model metadata (matches OpenCode server Provider.Model schema)
+// Source: submodules/opencode/schema/modelInfo.schema.json (canonical)
+// Verified: 2026-01-07 - 13 properties
+message OcModelInfo {
+  string id = 1;                                      // "claude-3-5-sonnet-20241022" (required)
+  string provider_id = 2;                             // "anthropic" (required, JSON: providerID)
+  string name = 3;                                    // "Claude 3.5 Sonnet" (required)
+  optional string family = 4;                         // Model family name (e.g., "claude-3.5")
+  OcModelAPI api = 5;                                 // API configuration (required)
+  OcModelCapabilities capabilities = 6;               // What the model supports (required)
+  OcModelCost cost = 7;                               // Pricing information (required)
+  OcModelLimits limit = 8;                            // Context/output limits (required, JSON: "limit" singular!)
+  OcModelStatus status = 9;                           // Lifecycle status (required)
+  map<string, google.protobuf.Value> options = 10;    // Configurable settings (required, flexible map)
+  map<string, string> headers = 11;                   // Custom headers for API calls (required)
+  string release_date = 12;                           // Model release date (required)
+  map<string, google.protobuf.Struct> variants = 13;  // Model variants with custom configs (optional)
+}
+
+// API configuration for model
+// Source: submodules/opencode/schema/modelAPI.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties
+message OcModelAPI {
+  string id = 1;     // API model ID (may differ from display ID) (required)
+  string url = 2;    // API endpoint URL (required)
+  string npm = 3;    // npm package for SDK (required)
+}
+
+// Model capabilities (what the model can do - boolean flags)
+// Source: submodules/opencode/schema/modelCapabilities.schema.json (canonical)
+// Verified: 2026-01-07 - 7 properties (all required)
+message OcModelCapabilities {
+  bool temperature = 1;                 // Supports temperature parameter
+  bool reasoning = 2;                   // Supports extended reasoning
+  bool attachment = 3;                  // Supports file attachments
+  bool toolcall = 4;                    // Supports tool calls
+  OcIOCapabilities input = 5;           // Input modality capabilities
+  OcIOCapabilities output = 6;          // Output modality capabilities
+  OcInterleavedCapability interleaved = 7;  // Supports interleaved content
+}
+
+// Interleaved content capability (can be simple bool or object with field spec)
+// Source: submodules/opencode/schema/modelCapabilities.schema.json (interleaved property, oneOf)
+message OcInterleavedCapability {
+  oneof value {
+    bool enabled = 1;                              // Simple boolean: true/false
+    OcInterleavedFieldSpec field_spec = 2;         // Object with field specification
+  }
+}
+
+// Field specification for interleaved capability
+message OcInterleavedFieldSpec {
+  enum Field {
+    FIELD_UNSPECIFIED = 0;
+    REASONING_CONTENT = 1;      // JSON: "reasoning_content"
+    REASONING_DETAILS = 2;      // JSON: "reasoning_details"
+  }
+  Field field = 1;
+}
+
+// Input/output modality capabilities
+// Source: submodules/opencode/schema/ioCapabilities.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcIOCapabilities {
+  bool text = 1;
+  bool audio = 2;
+  bool image = 3;
+  bool video = 4;
+  bool pdf = 5;
+}
+
+// Model pricing (per token)
+// Source: submodules/opencode/schema/modelCost.schema.json (canonical)
+// Verified: 2026-01-07 - 4 properties (input, output, cache required; experimentalOver200K optional)
+message OcModelCost {
+  double input = 1;                                       // Input token cost (required)
+  double output = 2;                                      // Output token cost (required)
+  OcCacheCost cache = 3;                                  // Cache costs (required)
+  optional OcExperimentalPricing experimental_over_200k = 4;  // JSON: experimentalOver200K
+}
+
+// Cache pricing
+// Source: submodules/opencode/schema/cacheCost.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+message OcCacheCost {
+  double read = 1;
+  double write = 2;
+}
+
+// Experimental pricing for context > 200K tokens
+// Source: submodules/opencode/schema/experimentalPricing.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcExperimentalPricing {
+  double input = 1;
+  double output = 2;
+  OcCacheCost cache = 3;
+}
+
+// Model context limits
+// Source: submodules/opencode/schema/modelLimits.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+message OcModelLimits {
+  double context = 1;  // Context window size (use double to match server z.number())
+  double output = 2;   // Max output tokens
+}
+
+// Model lifecycle status
+// Source: submodules/opencode/schema/modelStatus.schema.json (canonical)
+// Verified: 2026-01-07 - enum with 4 values
+enum OcModelStatus {
+  MODEL_STATUS_UNSPECIFIED = 0;
+  ALPHA = 1;      // JSON: "alpha"
+  BETA = 2;       // JSON: "beta"
+  ACTIVE = 3;     // JSON: "active"
+  DEPRECATED = 4; // JSON: "deprecated"
+}
+
+// ============================================
+// MODEL OPTIONS (Runtime Configuration)
+// ============================================
+
+// Model configurable options (typed version for validation)
+// Note: OcModelInfo.options uses flexible map; this typed version is for UI/validation
+// Source: submodules/opencode/schema/modelOptions.schema.json (canonical)
+message OcModelOptions {
+  // Universal options (all providers/models)
+  optional OcUniversalOptions universal = 1;
+
+  // Provider-specific options
+  oneof provider_options {
+    OcOpenAIOptions openai = 2;
+    OcGoogleOptions google = 3;
+    OcAnthropicOptions anthropic = 4;
+  }
+}
+
+// Universal settings supported by all models (when capabilities allow)
+// Source: submodules/opencode/schema/universalOptions.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both optional)
+message OcUniversalOptions {
+  optional double temperature = 1;        // 0.0-2.0, when model.capabilities.temperature == true
+  optional int32 max_output_tokens = 2;   // Override model limit (JSON: maxOutputTokens)
+}
+
+// OpenAI/OpenRouter/Responses API options
+// Source: submodules/opencode/schema/openaiOptions.schema.json (canonical)
+// Verified: 2026-01-07 - 16 properties (all optional)
+message OcOpenAIOptions {
+  optional string reasoning_effort = 1;      // "low", "medium", "minimal" (reasoning models only, JSON: reasoningEffort)
+  optional string reasoning_summary = 2;     // "auto" or custom summary (JSON: reasoningSummary)
+  optional OcTextVerbosity text_verbosity = 3; // Response verbosity (JSON: textVerbosity)
+  optional OcServiceTier service_tier = 4;     // Processing priority (JSON: serviceTier)
+  optional OcLogprobsConfig logprobs = 5;      // Token probability logging
+  optional int32 max_tool_calls = 6;         // Max built-in tool calls (JSON: maxToolCalls)
+  optional bool parallel_tool_calls = 7;     // Allow parallel tool execution (JSON: parallelToolCalls)
+  optional bool store = 8;                   // Store conversation for training
+  optional bool strict_json_schema = 9;      // Enforce strict JSON schema validation (JSON: strictJsonSchema)
+  optional string prompt_cache_key = 10;     // Prompt cache key for optimization (JSON: promptCacheKey)
+  repeated string include = 11;              // Additional response fields to include
+  optional string metadata = 12;             // Custom metadata JSON string
+  optional string user = 13;                 // End-user identifier
+  optional string instructions = 14;         // System instructions
+  optional string safety_identifier = 15;    // Safety classification ID (JSON: safetyIdentifier)
+  optional string previous_response_id = 16; // Continue from previous response (JSON: previousResponseID)
+}
+
+// Text verbosity levels for OpenAI models
+enum OcTextVerbosity {
+  TEXT_VERBOSITY_UNSPECIFIED = 0;
+  TEXT_VERBOSITY_LOW = 1;     // JSON: "low"
+  TEXT_VERBOSITY_MEDIUM = 2;  // JSON: "medium"
+  TEXT_VERBOSITY_HIGH = 3;    // JSON: "high"
+}
+
+// Service tier for request prioritization
+enum OcServiceTier {
+  SERVICE_TIER_UNSPECIFIED = 0;
+  SERVICE_TIER_AUTO = 1;      // JSON: "auto"
+  SERVICE_TIER_FLEX = 2;      // JSON: "flex"
+  SERVICE_TIER_PRIORITY = 3;  // JSON: "priority"
+}
+
+// Logprobs configuration (can be bool or int)
+message OcLogprobsConfig {
+  oneof config {
+    bool enabled = 1;              // true = return logprobs
+    int32 top_logprobs = 2;        // 1-20, number of top tokens to return (JSON: topLogprobs)
+  }
+}
+
+// Google/Gemini options
+// Source: submodules/opencode/schema/googleOptions.schema.json (canonical)
+// Verified: 2026-01-07 - 1 property (optional)
+message OcGoogleOptions {
+  optional OcThinkingConfig thinking_config = 1;  // JSON: thinkingConfig
+}
+
+// Thinking configuration for Google models
+// Source: submodules/opencode/schema/thinkingConfig.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both optional)
+message OcThinkingConfig {
+  optional bool include_thoughts = 1;      // Include thinking process in response (JSON: includeThoughts)
+  optional int32 thinking_budget = 2;      // Max tokens for thinking, 0 = minimal (JSON: thinkingBudget)
+}
+
+// Anthropic options (Claude extended thinking)
+// Source: submodules/opencode/schema/anthropicOptions.schema.json (canonical)
+// Verified: 2026-01-07 - 1 property (optional)
+message OcAnthropicOptions {
+  optional OcThinkingOptions thinking = 1;
+}
+
+// Thinking options for Anthropic models
+// Source: submodules/opencode/schema/thinkingOptions.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both optional)
+message OcThinkingOptions {
+  optional string type = 1;        // "enabled" or other modes
+  optional int32 budget_tokens = 2; // Max tokens for extended thinking (JSON: budgetTokens)
+}

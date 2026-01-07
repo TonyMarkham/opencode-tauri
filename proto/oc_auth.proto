@@ -1,0 +1,41 @@
+syntax = "proto3";
+package opencode.auth;
+
+// OAuth authentication credentials
+// Source: submodules/opencode/schema/oauth.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (type, refresh, access, expires, enterpriseUrl)
+message OcOAuth {
+  string type = 1;                     // const: "oauth" (discriminator)
+  string refresh = 2;                  // OAuth refresh token (required)
+  string access = 3;                   // OAuth access token (required)
+  double expires = 4;                  // Token expiration - Unix timestamp ms (required)
+  optional string enterprise_url = 5;  // Enterprise OAuth endpoint (optional, JSON: enterpriseUrl)
+}
+
+// API key authentication credentials
+// Source: submodules/opencode/schema/apiAuth.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (type, key)
+message OcApiAuth {
+  string type = 1;                     // const: "api" (discriminator)
+  string key = 2;                      // API key for authentication (required)
+}
+
+// Well-known authentication credentials (key + token pair)
+// Source: submodules/opencode/schema/wellKnownAuth.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (type, key, token)
+message OcWellKnownAuth {
+  string type = 1;                     // const: "wellknown" (discriminator)
+  string key = 2;                      // Well-known authentication key (required)
+  string token = 3;                    // Well-known authentication token (required)
+}
+
+// Authentication credentials (discriminated union)
+// Source: submodules/opencode/schema/auth.schema.json (canonical)
+// JSON Schema uses oneOf with type discriminator → protobuf oneof
+message OcAuth {
+  oneof auth {
+    OcOAuth oauth = 1;
+    OcApiAuth api = 2;
+    OcWellKnownAuth well_known = 3;   // JSON: wellKnown
+  }
+}

@@ -1,0 +1,59 @@
+syntax = "proto3";
+package opencode.provider;
+
+import "oc_model.proto";
+import "google/protobuf/struct.proto";
+
+// Provider metadata (aggregates models and configuration)
+// Source: submodules/opencode/schema/providerInfo.schema.json (canonical)
+// Verified: 2026-01-07 - 7 properties
+message OcProviderInfo {
+  string id = 1;                                      // "anthropic", "openai", etc. (required)
+  string name = 2;                                    // "Anthropic" (display name) (required)
+  OcProviderSource source = 3;                        // How provider was configured (required)
+  repeated string env = 4;                            // Environment variables used (e.g., ["ANTHROPIC_API_KEY"]) (required)
+  optional string key = 5;                            // API key hint (partial/masked)
+  OcProviderOptions options = 6;                      // Provider-level SDK initialization options (required)
+  map<string, opencode.model.OcModelInfo> models = 7; // Curated models keyed by model ID (required)
+}
+
+// Provider SDK initialization options
+// Source: submodules/opencode/schema/providerOptions.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (baseURL, apiKey, headers, timeout required; extra for additionalProperties)
+// Note: Flexible schema - additionalProperties: true allows provider-specific options
+message OcProviderOptions {
+  optional string base_url = 1;             // API endpoint override (JSON: baseURL)
+  // Examples: "https://api.openai.com/v1", "https://api.anthropic.com"
+  optional string api_key = 2;              // API authentication key (JSON: apiKey)
+  map<string, string> headers = 3;          // Custom HTTP headers
+  // Example: {"anthropic-beta": "claude-code-20250219,interleaved-thinking-2025-05-14"}
+  optional int32 timeout = 4;               // Request timeout in milliseconds (minimum: 0)
+
+  // Additional provider-specific options stored as flexible struct
+  // Examples:
+  //   - Azure: useCompletionUrls (bool)
+  //   - Bedrock: region, credentialProvider
+  //   - Vertex: project, location
+  google.protobuf.Struct extra = 5;
+}
+
+// How the provider was configured/discovered
+// Source: submodules/opencode/schema/providerSource.schema.json (canonical)
+// Verified: 2026-01-07 - enum with 4 values
+enum OcProviderSource {
+  PROVIDER_SOURCE_UNSPECIFIED = 0;
+  ENV = 1;        // Configured via environment variables (JSON: "env")
+  CONFIG = 2;     // Configured via config file (opencode.json) (JSON: "config")
+  CUSTOM = 3;     // Custom provider definition (plugin-based) (JSON: "custom")
+  API = 4;        // Discovered via API (auth.json) (JSON: "api")
+}
+
+// List of all available providers (API response)
+// Source: submodules/opencode/schema/providerList.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+// Maps to: GET /config/providers
+message OcProviderList {
+  repeated OcProviderInfo providers = 1;      // All configured providers with curated models (required)
+  map<string, string> default = 2;            // Default model ID per provider ID (required)
+  // Example: {"anthropic": "claude-3-5-sonnet-20241022", "openai": "gpt-4"}
+}

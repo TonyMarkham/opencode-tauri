@@ -2,7 +2,9 @@
 // Tests error serialization (critical for Tauri IPC)
 
 use crate::error::OpencodeError;
-use models::ErrorLocation;
+
+use common::ErrorLocation;
+
 use std::panic::Location;
 
 /// **VALUE**: Tests that errors can be serialized (required for Tauri IPC).

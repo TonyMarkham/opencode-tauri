@@ -1,0 +1,114 @@
+syntax = "proto3";
+package opencode.session;
+
+import "oc_model.proto";
+import "oc_provider.proto";
+
+// Core session identity and metadata (server-managed)
+// Source: submodules/opencode/schema/sessionInfo.schema.json (canonical)
+// Verified: 2026-01-07 - 11 properties
+message OcSessionInfo {
+  string id = 1;                                // Unique session ID (pattern: ^ses_) (required)
+  string project_id = 2;                        // Project identifier (required, JSON: projectID)
+  string directory = 3;                         // Working directory for this session (required)
+  optional string parent_id = 4;                // Parent session ID for forked sessions (pattern: ^ses_, JSON: parentID)
+  optional OcSessionSummary summary = 5;        // Session summary statistics
+  optional OcSessionShare share = 6;            // Share information if publicly shared
+  string title = 7;                             // Session title (required)
+  string version = 8;                           // OpenCode version that created this session (required)
+  OcSessionTime time = 9;                       // Timestamp metadata (required)
+  optional OcPermissionRuleset permission = 10; // Permission rules for this session
+  optional OcSessionRevert revert = 11;         // Revert state information
+}
+
+// Session timestamp metadata
+// Source: submodules/opencode/schema/sessionTime.schema.json (canonical)
+// Verified: 2026-01-07 - 4 properties (created, updated required; compacting, archived optional)
+message OcSessionTime {
+  int64 created = 1;             // Unix timestamp in milliseconds when session was created (required)
+  int64 updated = 2;             // Unix timestamp in milliseconds when session was last updated (required)
+  optional int64 compacting = 3; // Unix timestamp in milliseconds when session compaction started
+  optional int64 archived = 4;   // Unix timestamp in milliseconds when session was archived
+}
+
+// Session summary statistics
+// Source: submodules/opencode/schema/sessionSummary.schema.json (canonical)
+// Verified: 2026-01-07 - 4 properties (additions, deletions, files required; diffs optional)
+message OcSessionSummary {
+  int32 additions = 1;              // Total lines added (required)
+  int32 deletions = 2;              // Total lines deleted (required)
+  int32 files = 3;                  // Total files changed (required)
+  repeated OcFileDiff diffs = 4;    // Individual file diffs
+}
+
+// File diff information
+// Source: submodules/opencode/schema/fileDiff.schema.json (canonical)
+// Verified: 2026-01-07 - 5 properties (all required)
+message OcFileDiff {
+  string file = 1;        // File path (required)
+  string before = 2;      // Content before changes (required)
+  string after = 3;       // Content after changes (required)
+  int32 additions = 4;    // Lines added in this file (required)
+  int32 deletions = 5;    // Lines deleted in this file (required)
+}
+
+// Session share information
+// Source: submodules/opencode/schema/sessionShare.schema.json (canonical)
+// Verified: 2026-01-07 - 1 property (required)
+message OcSessionShare {
+  string url = 1;  // Public share URL (required)
+}
+
+// Session revert state
+// Source: submodules/opencode/schema/sessionRevert.schema.json (canonical)
+// Verified: 2026-01-07 - 4 properties (messageID required; partID, snapshot, diff optional)
+message OcSessionRevert {
+  string message_id = 1;      // Message ID to revert to (required, JSON: messageID)
+  optional string part_id = 2;    // Part ID within message (JSON: partID)
+  optional string snapshot = 3;   // Snapshot reference
+  optional string diff = 4;       // Diff information
+}
+
+// Permission action enum
+// Source: submodules/opencode/schema/permissionAction.schema.json (canonical)
+// Verified: 2026-01-07 - enum with 3 values
+enum OcPermissionAction {
+  PERMISSION_ACTION_UNSPECIFIED = 0;
+  ALLOW = 1;  // JSON: "allow"
+  DENY = 2;   // JSON: "deny"
+  ASK = 3;    // JSON: "ask"
+}
+
+// Permission rule
+// Source: submodules/opencode/schema/permissionRule.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcPermissionRule {
+  string permission = 1;          // Permission type identifier (required)
+  string pattern = 2;             // Pattern to match (supports wildcards) (required)
+  OcPermissionAction action = 3;  // Action to take when pattern matches (required)
+}
+
+// Permission ruleset (array wrapper)
+// Source: submodules/opencode/schema/permissionRuleset.schema.json (canonical)
+// Verified: 2026-01-07 - array type (wrapped in message for protobuf compatibility)
+// Note: JSON Schema defines this as a top-level array. Protobuf doesn't support
+// top-level repeated fields in message definitions, so we wrap it in a message.
+message OcPermissionRuleset {
+  repeated OcPermissionRule rules = 1;  // Array of permission rules (required in JSON as array)
+}
+
+// Model selection for a session (references model within provider)
+// Source: Derived from modelSelection.schema.json
+// Note: Used in UI state, combines provider + model selection
+message OcModelSelection {
+  opencode.provider.OcProviderInfo provider = 1;  // Provider with curated models list (required)
+  string model_id = 2;                            // "claude-3-5-sonnet-20241022" (must exist in provider.models) (required)
+  string name = 3;                                // "Claude 3.5 Sonnet" (for display) (required)
+}
+
+// Session list (API response)
+// Source: submodules/opencode/schema/sessionList.schema.json (canonical)
+// Maps to: GET /session
+message OcSessionList {
+  repeated OcSessionInfo sessions = 1;  // All sessions (required)
+}

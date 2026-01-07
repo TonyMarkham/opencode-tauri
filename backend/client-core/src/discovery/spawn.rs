@@ -1,9 +1,9 @@
 use crate::discovery::{get_override_port, process::check_health};
 use crate::error::spawn::SpawnError;
+use crate::proto::IpcServerInfo;
 use crate::{OPENCODE_BINARY, OPENCODE_SERVER_BASE_URL, OPENCODE_SERVER_HOSTNAME};
 
-use models::ServerInfo;
-use models::{ErrorLocation, ServerInfoBuilder};
+use common::ErrorLocation;
 
 use std::env::current_exe;
 use std::io::Error as IoError;
@@ -61,7 +61,7 @@ pub(crate) fn build_spawn_command(port: &str) -> TokioCommand {
 ///
 /// * `Ok(ServerInfo)` - Server spawned and is healthy
 /// * `Err(SpawnError)` - Failed to spawn, parse output, or server didn't become healthy
-pub async fn spawn_and_wait() -> Result<ServerInfo, SpawnError> {
+pub async fn spawn_and_wait() -> Result<IpcServerInfo, SpawnError> {
     let port_arg = get_override_port()
         .map(|p| p.to_string())
         .unwrap_or_else(|| AUTO_SELECT_PORT.to_string());
@@ -88,14 +88,14 @@ pub async fn spawn_and_wait() -> Result<ServerInfo, SpawnError> {
     // The OS will clean it up when it exits
     forget(child);
 
-    let server_info = ServerInfoBuilder::default()
-        .with_pid(pid)
-        .with_port(port)
-        .with_base_url(base_url)
-        .with_name(OPENCODE_BINARY)
-        .with_command(format!("{OPENCODE_BINARY} {SERVE_COMMAND}"))
-        .with_owned(true)
-        .build()?;
+    let server_info = IpcServerInfo {
+        pid,
+        port: port as u32,
+        base_url,
+        name: OPENCODE_BINARY.to_string(),
+        command: format!("{OPENCODE_BINARY} {SERVE_COMMAND}"),
+        owned: true,
+    };
 
     Ok(server_info)
 }

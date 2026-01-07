@@ -1,10 +1,7 @@
 pub mod discovery;
 pub mod error;
-pub mod ws;
-
-pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/opencode.rs"));
-}
+pub mod ipc;
+pub mod proto;
 
 #[cfg(test)]
 mod tests;

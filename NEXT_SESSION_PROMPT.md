@@ -1,160 +1,211 @@
-# Session 5: WebSocket Server
+# Session 6 Continuation: IPC Tests & Cleanup
 
-**Goal:** WebSocket server in client-core that handles session operations.
+## Session Context
 
-**Demo:** Connect with `wscat`, list sessions, create session.
+**Previous session completed:** Steps 1-7 of Session 6 (Proto foundation + IPC server implementation)
 
----
-
-## What Exists
-
-**Rust (`backend/client-core/`):**
-- `src/lib.rs` - Exports `discovery`, `error`, `ws`, `proto`
-- `src/discovery/` - Server discovery, spawn, health
-- `src/error/ws.rs` - `WsError` type (stub)
-- `Cargo.toml` - Has `tokio-tungstenite`, `prost`, `futures-util`
-- `build.rs` - Protobuf codegen configured
-
-**Proto (`proto/ipc.proto`):**
-- `ClientMessage` / `ServerMessage` envelopes
-- `AuthHandshake` / `AuthHandshakeResponse`
-- `ListSessionsRequest` / `SessionList` / `SessionInfo`
-- `CreateSessionRequest` / `DeleteSessionRequest`
-- `ErrorResponse`
+**This session:** Complete Steps 8-10 (Tests + Tauri integration + Cleanup)
 
 ---
 
-## What to Build
+## 📋 Read These Files First
 
-### 1. WebSocket Server Module
-
-Create `backend/client-core/src/ws/mod.rs` and `server.rs`:
-
-```
-ws/
-├── mod.rs      # Public API: start_server()
-└── server.rs   # Server implementation
-```
-
-**Public API:**
-```rust
-pub async fn start_server(port: u16, auth_token: String, opencode_url: String) -> Result<WsHandle, WsError>
-
-pub struct WsHandle {
-    // Shutdown handle
-}
-```
-
-**Server behavior:**
-- Bind to `127.0.0.1:{port}` only
-- Accept connections
-- First message must be `AuthHandshake` with matching token
-- Reject bad auth, close connection
-- Route `ClientMessage` to handlers
-- Send `ServerMessage` responses
-
-### 2. Message Handlers
-
-Handlers that bridge to OpenCode HTTP API:
-
-```rust
-async fn handle_list_sessions(opencode_url: &str) -> Result<SessionList, WsError>
-// GET {opencode_url}/session
-
-async fn handle_create_session(opencode_url: &str, req: CreateSessionRequest) -> Result<SessionInfo, WsError>
-// POST {opencode_url}/session
-
-async fn handle_delete_session(opencode_url: &str, req: DeleteSessionRequest) -> Result<(), WsError>
-// DELETE {opencode_url}/session/{id}
-```
-
-### 3. Error Handling
-
-Expand `src/error/ws.rs`:
-
-```rust
-pub enum WsError {
-    Bind { port: u16, source: std::io::Error },
-    Auth { message: String },
-    Http { status: u16, message: String },
-    Protocol { message: String },
-    // etc.
-}
-```
-
-### 4. Tauri Integration
-
-Add to `apps/desktop/opencode/src/commands/`:
-
-```rust
-#[tauri::command]
-pub fn get_ws_config(state: State<AppState>) -> Result<WsConfig, String>
-
-pub struct WsConfig {
-    pub port: u16,
-    pub auth_token: String,
-}
-```
-
-Start WebSocket server in Tauri setup hook.
+1. `/Users/tony/git/opencode-tauri/CRITICAL_OPERATING_CONSTRAINTS.md` - Operating mode and quality standards
+2. `/Users/tony/git/opencode-tauri/Session_6_Plan.md` - Full session plan with progress
+3. `/Users/tony/git/opencode-tauri/docs/adr/0002-thin-tauri-layer-principle.md` - Architecture principle
+4. `/Users/tony/git/opencode-tauri/docs/adr/0003-websocket-protobuf-ipc.md` - IPC protocol design
 
 ---
 
-## OpenCode API Reference
+## ✅ What's Already Done (Steps 1-7)
 
-**List sessions:**
-```
-GET /session
-Response: { "sessions": [{ "id": "...", "title": "...", "created": ..., "updated": ... }] }
-```
+### Core Infrastructure
+- ✅ All 11 proto files created and compiling
+- ✅ `IpcErrorCode` enum added (no magic strings)
+- ✅ Error types expanded (`Auth`, `ProtobufDecode`, `ProtobufEncode`)
+- ✅ File structure cleaned (`handle.rs` for struct, `server.rs` for implementation)
+- ✅ Comprehensive documentation added to all modules and functions
 
-**Create session:**
-```
-POST /session
-Body: {}
-Response: { "id": "...", "title": null, "created": ..., "updated": ... }
-```
+### Auth & Security
+- ✅ Auth state machine implemented (`ConnectionState`)
+- ✅ Token generation (UUID) on server start
+- ✅ First-message validation (must be `IpcAuthHandshake`)
+- ✅ Non-localhost rejection
+- ✅ Fail-closed security model
 
-**Delete session:**
-```
-DELETE /session/{id}
-Response: 204 No Content
-```
+### Server Management
+- ✅ State management migrated to client-core (`IpcState` actor pattern)
+- ✅ Binary protobuf message handling
+- ✅ 4 server handlers implemented and wired up:
+  - `handle_discover_server()` - Discovery + state update
+  - `handle_spawn_server()` - Spawn + state update
+  - `handle_check_health()` - Health check from state
+  - `handle_stop_server()` - Stop + state clear
+- ✅ Test helpers created (`helpers.rs`)
+
+### Current Status
+- ✅ **Build passes:** `cargo build -p client-core` succeeds
+- ⚠️ **3 tests failing:** Echo tests don't authenticate (expected - will fix in Step 8)
+- ✅ **Code quality:** Production-grade, no TODOs, comprehensive error handling
 
 ---
 
-## Testing
+## 🎯 What Needs to Be Done (Steps 8-10)
 
-Test with `wscat`:
+### Step 8: Update Tests (~40 min)
+
+**Current test state:**
+- 3 IPC echo tests **FAILING** (don't send auth handshake)
+- Test helpers exist but unused
+
+**What needs to happen:**
+
+1. **Update 3 existing echo tests** (`integration_tests/ipc/ipc.rs`):
+   - Add auth handshake before sending messages
+   - Use helpers from `helpers.rs`
+   - Tests should authenticate, then echo messages
+
+2. **Add 6 new auth tests**:
+   - Valid token → auth succeeds
+   - Invalid token → auth fails, connection closes
+   - Wrong first message (not auth) → connection closes
+   - Missing auth token → connection closes
+   - Non-localhost connection → rejected silently
+   - Auth handshake after first message → error response
+
+3. **Add 4 server management tests**:
+   - Discover server (no server running → `None`)
+   - Spawn server → receives `IpcServerInfo`
+   - Check health (no server → error)
+   - Stop server (no server → error)
+
+**Test patterns:**
+```rust
+// Auth then send messages
+let mut ws = connect_to_server(port).await;
+authenticate(&mut ws, "test-token").await;
+// Now send actual messages
+```
+
+### Step 9: Update Tauri main.rs (~5 min)
+
+**File:** `apps/desktop/opencode/src/main.rs`
+
+**Changes needed:**
+1. Start IPC server in `.setup()` handler
+2. Pass auth token (generate or read from config)
+3. Log the port and token for Blazor to connect
+
+**Example:**
+```rust
+tauri::Builder::default()
+    .setup(|app| {
+        let auth_token = uuid::Uuid::new_v4().to_string();
+        tokio::spawn(async move {
+            client_core::ipc::start_ipc_server(19876, Some(auth_token))
+                .await
+                .expect("Failed to start IPC server");
+        });
+        Ok(())
+    })
+    .run(...)
+```
+
+### Step 10: Cleanup (~10 min)
+
+1. **Format code:**
+   ```bash
+   cargo fmt --all
+   ```
+
+2. **Fix clippy warnings:**
+   ```bash
+   cargo clippy --all-targets --all-features
+   ```
+
+3. **Final test run:**
+   ```bash
+   cargo test -p client-core
+   ```
+
+4. **Verify logging:**
+   - Check that `info!`, `warn!`, `error!` are used appropriately
+   - No `println!` or `dbg!` macros
+
+---
+
+## 🚨 Critical Constraints (Reminder)
+
+### Teaching Mode
+- **Default:** Teach first, explain approach, THEN implement when asked
+- **Never:** Write code without explaining the plan first
+- **Always:** Ask "Should I explain this step, or implement it?"
+
+### Code Quality
+- **No magic strings:** Use enums/constants (already done for error codes)
+- **No TODOs:** If something can't be done, document why and what's needed
+- **Comprehensive errors:** Every error has context and location
+- **Production-grade:** This is shipping code, not a prototype
+
+### File Organization
+- **Struct in matching file:** `IpcServerHandle` in `handle.rs` (already done)
+- **No "dump everything in one file":** Keep modules focused and clear
+- **Documentation required:** Module docs (`//!`) and function docs (`///`)
+
+### Architecture
+- **ADR-0002:** All business logic in `client-core`, NOT in Tauri
+- **ADR-0003:** WebSocket + binary protobuf for IPC
+- **Security first:** Localhost-only, auth required, fail-closed
+
+---
+
+## 🔧 Verification Before Starting
+
+Run these commands to verify current state:
 
 ```bash
-# Connect
-wscat -c ws://127.0.0.1:PORT
+cd /Users/tony/git/opencode-tauri
 
-# Send auth (as binary protobuf - or add text debug mode)
+# Proto files exist
+ls proto/oc_*.proto proto/ipc.proto
+
+# Build succeeds
+cargo build -p client-core
+
+# Check test status (3 should fail)
+cargo test -p client-core --test integration_tests
+
+# Verify handlers exist
+rg "async fn handle_discover_server" backend/client-core/src/ipc/server.rs
+rg "async fn handle_spawn_server" backend/client-core/src/ipc/server.rs
+rg "async fn handle_check_health" backend/client-core/src/ipc/server.rs
+rg "async fn handle_stop_server" backend/client-core/src/ipc/server.rs
 ```
 
-Or create a simple test in `backend/client-core/integration_tests/`.
+**Expected results:**
+- ✅ Proto files present (11 files)
+- ✅ Build succeeds
+- ⚠️ 3 tests failing (echo tests)
+- ✅ All 4 handlers found
 
 ---
 
-## Success Criteria
+## 🎯 Session Goal
 
-- [ ] WebSocket server starts on app launch
-- [ ] Auth handshake works (accept valid, reject invalid)
-- [ ] `ListSessions` returns session list from OpenCode
-- [ ] `CreateSession` creates session, returns info
-- [ ] `DeleteSession` deletes session
-- [ ] Tauri command returns WS config (port + token)
-- [ ] Server binds only to localhost
+By end of this session:
+1. ✅ All tests passing (13 IPC tests total: 3 echo + 6 auth + 4 server mgmt)
+2. ✅ Tauri main.rs starts IPC server
+3. ✅ Code formatted and clippy-clean
+4. ✅ Production-ready IPC server with auth, protobuf, and server management
+
+**Estimated time:** ~1 hour
 
 ---
 
-## Not Building (Later Sessions)
+## 💬 How to Start
 
-- C# WebSocket client (Session 6)
-- Chat UI (Session 7)
-- SendMessage (Session 7)
-- SSE bridge (Session 8)
-- Streaming (Session 8)
-- Tool calls (Session 9)
+When you begin, say:
+
+> "I've read the context files. Current state verified: Steps 1-7 complete, 3 tests failing as expected. Ready to start Step 8 (Update Tests). Should I explain the test strategy first, or start implementing?"
+
+Then wait for my decision on teaching mode vs. direct implementation.

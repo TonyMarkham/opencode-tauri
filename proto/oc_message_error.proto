@@ -1,0 +1,84 @@
+syntax = "proto3";
+package opencode.message.error;
+
+import "google/protobuf/struct.proto";
+
+// Message error discriminated union
+// Source: submodules/opencode/schema/messageError.schema.json (canonical)
+// Verified: 2026-01-07 - oneOf with 5 variants (name discriminator)
+message OcMessageError {
+  oneof error {
+    OcApiError api = 1;
+    OcProviderAuthError provider_auth = 2;
+    OcUnknownError unknown = 3;
+    OcOutputLengthError output_length = 4;
+    OcAbortedError aborted = 5;
+  }
+}
+
+// ============================================
+// API & NETWORK ERRORS
+// ============================================
+
+// API error (HTTP/network failures from provider)
+// Source: submodules/opencode/schema/apiError.schema.json (canonical)
+// Verified: 2026-01-07 - 6 properties (name, message, status required; cause, code, headers optional)
+// Note: Uses NamedError format from OpenCode error handling
+message OcApiError {
+  string name = 1;                              // "APIError" (discriminator, const)
+  string message = 2;                           // Error message (required)
+  optional string cause = 3;                    // Underlying cause (stack trace, etc.)
+  int32 status = 4;                             // HTTP status code (required, e.g., 429, 500, 503)
+  optional string code = 5;                     // Provider-specific error code (e.g., "rate_limit_exceeded")
+  optional google.protobuf.Struct headers = 6;  // Response headers (e.g., retry-after, rate-limit info)
+}
+
+// Provider authentication error (invalid/expired API key, OAuth failure)
+// Source: submodules/opencode/schema/providerAuthError.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcProviderAuthError {
+  string name = 1;                              // "ProviderAuthError" (discriminator, const)
+  string message = 2;                           // Error message (required)
+  string provider_id = 3;                       // Provider that failed auth (required, JSON: providerID)
+  // Example: "anthropic", "openai"
+}
+
+// ============================================
+// GENERATION ERRORS
+// ============================================
+
+// Output length exceeded error (model hit max token limit)
+// Source: submodules/opencode/schema/outputLengthError.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcOutputLengthError {
+  string name = 1;                              // "OutputLengthError" (discriminator, const)
+  string message = 2;                           // Error message (required)
+  int32 max_tokens = 3;                         // Maximum allowed tokens (required, JSON: maxTokens)
+  // Example: 4096, 8192, 16384
+}
+
+// ============================================
+// USER-INITIATED ERRORS
+// ============================================
+
+// Aborted error (user cancelled generation)
+// Source: submodules/opencode/schema/abortedError.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+message OcAbortedError {
+  string name = 1;                              // "AbortedError" (discriminator, const)
+  string message = 2;                           // Error message (required)
+  // Example: "Generation cancelled by user"
+}
+
+// ============================================
+// CATCH-ALL ERROR
+// ============================================
+
+// Unknown error (unexpected failures, catch-all)
+// Source: submodules/opencode/schema/unknownError.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (name, message required; cause optional)
+message OcUnknownError {
+  string name = 1;                              // "UnknownError" (discriminator, const)
+  string message = 2;                           // Error message (required)
+  optional string cause = 3;                    // Underlying cause if available (stack trace, etc.)
+}

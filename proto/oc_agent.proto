@@ -1,0 +1,38 @@
+syntax = "proto3";
+package opencode.agent;
+
+import "oc_session.proto";
+import "google/protobuf/struct.proto";
+
+// Agent configuration and metadata
+// Source: submodules/opencode/schema/agentInfo.schema.json (canonical)
+// Verified: 2026-01-07 - 13 properties
+message OcAgentInfo {
+  string name = 1;                                      // Agent name identifier (required)
+  optional string description = 2;                      // Human-readable description
+  string mode = 3;                                      // "subagent", "primary", or "all" (required)
+  optional bool native = 4;                             // Whether this is a built-in native agent
+  optional bool hidden = 5;                             // Whether to hide from UI listings
+  optional double top_p = 6;                            // Top-p sampling parameter (JSON: topP)
+  optional double temperature = 7;                      // Temperature parameter for model inference
+  optional string color = 8;                            // Hex color for UI differentiation
+  opencode.session.OcPermissionRuleset permission = 9;  // Permission ruleset (required)
+  optional OcAgentModel model = 10;                     // Default model selection
+  optional string prompt = 11;                          // Custom system prompt
+  google.protobuf.Struct options = 12;                  // Additional agent-specific options (required, additionalProperties: true)
+  optional int32 steps = 13;                            // Maximum inference steps (minimum: 1)
+}
+
+// Model selection for an agent
+// Source: submodules/opencode/schema/agentModel.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+message OcAgentModel {
+  string model_id = 1;     // Model identifier (required, JSON: modelID)
+  string provider_id = 2;  // Provider identifier (required, JSON: providerID)
+}
+
+// Agent list (API response)
+// Maps to: GET /agent
+message OcAgentList {
+  repeated OcAgentInfo agents = 1;  // All available agents (required)
+}

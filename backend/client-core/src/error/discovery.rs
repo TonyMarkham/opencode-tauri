@@ -1,4 +1,4 @@
-use models::{ErrorLocation, ModelError};
+use common::ErrorLocation;
 
 use std::error::Error as StdError;
 
@@ -25,14 +25,4 @@ pub enum DiscoveryError {
         message: String,
         location: ErrorLocation,
     },
-}
-
-impl From<ModelError> for DiscoveryError {
-    fn from(error: ModelError) -> Self {
-        match error {
-            ModelError::Validation { message, location } => {
-                DiscoveryError::Validation { message, location }
-            }
-        }
-    }
 }

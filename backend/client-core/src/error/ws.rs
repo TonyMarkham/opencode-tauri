@@ -1,4 +1,4 @@
-use models::ErrorLocation;
+use common::ErrorLocation;
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]

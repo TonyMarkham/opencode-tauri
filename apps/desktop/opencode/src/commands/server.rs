@@ -1,7 +1,9 @@
 use crate::error::OpencodeError;
 use crate::state::{AppState, StateCommand};
 
-use models::{ErrorLocation, ServerInfo};
+use client_core::proto::IpcServerInfo;
+
+use common::ErrorLocation;
 
 use client_core::discovery::{process, spawn};
 
@@ -23,7 +25,7 @@ use tauri::{State, command as TauriCommand};
 #[TauriCommand]
 pub async fn discover_server(
     state: State<'_, AppState>,
-) -> Result<Option<ServerInfo>, OpencodeError> {
+) -> Result<Option<IpcServerInfo>, OpencodeError> {
     debug!("Starting server discovery");
 
     let result = process::discover().map_err(|e| {
@@ -71,7 +73,7 @@ pub async fn discover_server(
 /// * `Ok(ServerInfo)` - Server spawned successfully and is healthy
 /// * `Err(OpencodeError)` - Failed to spawn, parse output, or server didn't become healthy
 #[TauriCommand]
-pub async fn spawn_server(state: State<'_, AppState>) -> Result<ServerInfo, OpencodeError> {
+pub async fn spawn_server(state: State<'_, AppState>) -> Result<IpcServerInfo, OpencodeError> {
     info!("Spawning new OpenCode server");
 
     let server_info = spawn::spawn_and_wait().await.map_err(|e| {

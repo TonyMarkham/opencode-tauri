@@ -1,5 +1,6 @@
 use client_core::discovery::process;
-use models::ServerInfo;
+use client_core::proto::IpcServerInfo;
+
 use opencode::state::{AppState, StateCommand};
 
 // ============================================================================
@@ -65,7 +66,7 @@ async fn given_real_discovery_when_updating_state_then_integration_works() {
 async fn given_server_in_state_when_checking_health_then_uses_state_data() {
     // GIVEN: AppState with a mock server
     let state = AppState::new();
-    let mock_server = ServerInfo {
+    let mock_server = IpcServerInfo {
         pid: 12345,
         port: 65534, // Port unlikely to have a server
         base_url: String::from("http://127.0.0.1:65534"),
@@ -116,7 +117,7 @@ async fn given_concurrent_reads_and_writes_when_executed_then_no_deadlock() {
     let state4 = state.clone();
 
     let writer1 = tokio::spawn(async move {
-        let server = ServerInfo {
+        let server = IpcServerInfo {
             pid: 11111,
             port: 4001,
             base_url: String::from("http://127.0.0.1:4001"),

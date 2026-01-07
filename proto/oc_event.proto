@@ -1,0 +1,161 @@
+syntax = "proto3";
+package opencode.event;
+
+import "oc_message.proto";
+import "oc_message_part.proto";
+import "oc_session.proto";
+import "oc_tool.proto";
+
+// ============================================
+// EVENT STREAM WRAPPER
+// ============================================
+
+// Global event stream (SSE → gRPC translation)
+// Source: submodules/opencode/schema/globalEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+// Note: OpenCode SSE events include directory context for multi-project support
+message OcGlobalEvent {
+  string directory = 1;                         // Working directory context (required)
+  OcEvent payload = 2;                          // The actual event (required)
+}
+
+// Event discriminated union (13 event types)
+// Source: submodules/opencode/schema/event.schema.json (canonical)
+// Verified: 2026-01-07 - oneOf with 13 variants (type discriminator)
+message OcEvent {
+  oneof event {
+    OcMessageUpdatedEvent message_updated = 1;
+    OcMessageRemovedEvent message_removed = 2;
+    OcMessagePartUpdatedEvent message_part_updated = 3;
+    OcMessagePartRemovedEvent message_part_removed = 4;
+    OcSessionCreatedEvent session_created = 5;
+    OcSessionUpdatedEvent session_updated = 6;
+    OcSessionDeletedEvent session_deleted = 7;
+    OcSessionStatusEvent session_status = 8;
+    OcPermissionAskedEvent permission_asked = 9;
+    OcPermissionRepliedEvent permission_replied = 10;
+  }
+}
+
+// ============================================
+// MESSAGE EVENTS (Real-time message updates)
+// ============================================
+
+// Message updated event (new message or message changed)
+// Source: submodules/opencode/schema/messageUpdatedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcMessageUpdatedEvent {
+  string type = 1;                              // "message.updated" (const discriminator)
+  string session_id = 2;                        // Session ID (required, JSON: sessionID)
+  opencode.message.OcMessage message = 3;       // Full message (user or assistant) (required)
+}
+
+// Message removed event (message deleted)
+// Source: submodules/opencode/schema/messageRemovedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcMessageRemovedEvent {
+  string type = 1;                              // "message.removed" (const discriminator)
+  string session_id = 2;                        // Session ID (required, JSON: sessionID)
+  string message_id = 3;                        // Message ID that was removed (required, JSON: messageID)
+}
+
+// Message part updated event (part added/changed within message)
+// Source: submodules/opencode/schema/messagePartUpdatedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 4 properties (all required)
+message OcMessagePartUpdatedEvent {
+  string type = 1;                              // "message.part.updated" (const discriminator)
+  string session_id = 2;                        // Session ID (required, JSON: sessionID)
+  string message_id = 3;                        // Message ID (required, JSON: messageID)
+  opencode.message.part.OcPart part = 4;        // The part that was updated (required)
+}
+
+// Message part removed event (part deleted from message)
+// Source: submodules/opencode/schema/messagePartRemovedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 4 properties (all required)
+message OcMessagePartRemovedEvent {
+  string type = 1;                              // "message.part.removed" (const discriminator)
+  string session_id = 2;                        // Session ID (required, JSON: sessionID)
+  string message_id = 3;                        // Message ID (required, JSON: messageID)
+  string part_id = 4;                           // Part ID that was removed (required, JSON: partID)
+}
+
+// ============================================
+// SESSION EVENTS (Session lifecycle)
+// ============================================
+
+// Session created event (new session/tab)
+// Source: submodules/opencode/schema/sessionCreatedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+message OcSessionCreatedEvent {
+  string type = 1;                              // "session.created" (const discriminator)
+  opencode.session.OcSessionInfo session = 2;   // Full session info (required)
+}
+
+// Session updated event (session metadata changed)
+// Source: submodules/opencode/schema/sessionUpdatedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+message OcSessionUpdatedEvent {
+  string type = 1;                              // "session.updated" (const discriminator)
+  opencode.session.OcSessionInfo session = 2;   // Updated session info (required)
+}
+
+// Session deleted event (session/tab closed)
+// Source: submodules/opencode/schema/sessionDeletedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 2 properties (both required)
+message OcSessionDeletedEvent {
+  string type = 1;                              // "session.deleted" (const discriminator)
+  string session_id = 2;                        // Session ID that was deleted (required, JSON: sessionID)
+}
+
+// Session status event (session state changed: idle, thinking, etc.)
+// Source: submodules/opencode/schema/sessionStatusEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcSessionStatusEvent {
+  string type = 1;                              // "session.status" (const discriminator)
+  string session_id = 2;                        // Session ID (required, JSON: sessionID)
+  OcSessionStatus status = 3;                   // New status (required)
+}
+
+// Session status union (idle vs thinking with details)
+// Source: submodules/opencode/schema/sessionStatus.schema.json (canonical)
+// Verified: 2026-01-07 - oneOf with 2 variants
+message OcSessionStatus {
+  oneof status {
+    OcSessionStatusIdle idle = 1;
+    OcSessionStatusThinking thinking = 2;
+  }
+}
+
+// Idle status (session not doing anything)
+message OcSessionStatusIdle {
+  string status = 1;                            // "idle" (const discriminator)
+}
+
+// Thinking status (session generating response)
+message OcSessionStatusThinking {
+  string status = 1;                            // "thinking" (const discriminator)
+  string message_id = 2;                        // Message ID being generated (required, JSON: messageID)
+}
+
+// ============================================
+// PERMISSION EVENTS (User approval flow)
+// ============================================
+
+// Permission asked event (tool needs user approval)
+// Source: submodules/opencode/schema/permissionAskedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 3 properties (all required)
+message OcPermissionAskedEvent {
+  string type = 1;                              // "permission.asked" (const discriminator)
+  string session_id = 2;                        // Session ID (required, JSON: sessionID)
+  opencode.tool.OcPermissionRequest request = 3; // Permission request details (required)
+}
+
+// Permission replied event (user responded to permission request)
+// Source: submodules/opencode/schema/permissionRepliedEvent.schema.json (canonical)
+// Verified: 2026-01-07 - 4 properties (all required)
+message OcPermissionRepliedEvent {
+  string type = 1;                              // "permission.replied" (const discriminator)
+  string session_id = 2;                        // Session ID (required, JSON: sessionID)
+  string request_id = 3;                        // Permission request ID (required, JSON: requestID)
+  opencode.tool.OcPermissionReply reply = 4;    // User's reply (allow/deny/allow-all) (required)
+}

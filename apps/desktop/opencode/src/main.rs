@@ -6,7 +6,7 @@ use opencode::error::OpencodeError;
 use opencode::logger::initialize as LoggerInitialize;
 use opencode::state::AppState;
 
-use models::ErrorLocation;
+use common::ErrorLocation;
 
 use std::fs::create_dir_all;
 use std::panic::Location;

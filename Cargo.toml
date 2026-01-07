@@ -2,7 +2,7 @@
 members = [
     "apps/desktop/opencode",
     "backend/client-core",
-    "models"
+    "common"
 ]
 
 resolver = "3"
@@ -24,11 +24,12 @@ const_format = { version = "0.2.35" }
 tauri = { version = "2.9.5" }
 tauri-build = { version = "2.5.3", features = [] }
 prost = { version = "0.14.1" }
+prost-types = { version = "0.14.1" }
 prost-build = { version = "0.14.1" }
 tokio-tungstenite = { version = "0.28.0" }
 futures-util = { version = "0.3.31" }
 uuid = { version = "1.19.0", features = ["v4"] }
 url = { version = "2.5.8" }
 
-models = { path = "models" }
+common = { path = "common" }
 client-core = { path = "backend/client-core" }

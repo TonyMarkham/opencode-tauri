@@ -2,164 +2,205 @@ syntax = "proto3";
 package opencode;
 
 // ============================================
-// ENVELOPE (wraps all messages)
+// IMPORTS: All OpenCode canonical models
 // ============================================
 
-message ClientMessage {
-  uint64 request_id = 1;
-  
+import "oc_auth.proto";
+import "oc_model.proto";
+import "oc_provider.proto";
+import "oc_session.proto";
+import "oc_agent.proto";
+import "oc_tool.proto";
+import "oc_message.proto";
+import "oc_message_part.proto";
+import "oc_message_error.proto";
+import "oc_event.proto";
+
+// ============================================
+// IPC ENVELOPES (Blazor ↔ client-core)
+// ============================================
+
+// Client → Server envelope (wraps all requests)
+message IpcClientMessage {
+  uint64 request_id = 1;  // Correlates request with response
+
   oneof payload {
-    // Auth
-    AuthHandshake auth_handshake = 10;
-    
-    // Sessions
-    ListSessionsRequest list_sessions = 20;
-    CreateSessionRequest create_session = 21;
-    DeleteSessionRequest delete_session = 22;
-    
-    // Agents
-    ListAgentsRequest list_agents = 30;
-    
-    // Providers
-    GetProviderStatusRequest get_provider_status = 40;
-    
-    // Auth operations
-    SetAuthRequest set_auth = 50;
-    GetAuthRequest get_auth = 51;
+    // Auth (10-14)
+    IpcAuthHandshake auth_handshake = 10;
+
+    // Server Management (15-18)
+    IpcDiscoverServerRequest discover_server = 15;
+    IpcSpawnServerRequest spawn_server = 16;
+    IpcCheckHealthRequest check_health = 17;
+    IpcStopServerRequest stop_server = 18;
+
+    // Sessions (20-29)
+    IpcListSessionsRequest list_sessions = 20;
+    IpcCreateSessionRequest create_session = 21;
+    IpcDeleteSessionRequest delete_session = 22;
+
+    // Agents (30-39)
+    IpcListAgentsRequest list_agents = 30;
+
+    // Providers (40-49)
+    IpcGetProviderStatusRequest get_provider_status = 40;
+
+    // Auth Operations (50-59)
+    IpcSetAuthRequest set_auth = 50;
+    IpcGetAuthRequest get_auth = 51;
   }
 }
 
-message ServerMessage {
-  uint64 request_id = 1;
-  
+// Server → Client envelope (wraps all responses)
+message IpcServerMessage {
+  uint64 request_id = 1;  // Correlates with request
+
   oneof payload {
-    // Auth
-    AuthHandshakeResponse auth_handshake_response = 10;
-    
-    // Sessions
-    SessionList session_list = 20;
-    SessionInfo session_info = 21;
-    
-    // Agents
-    AgentList agent_list = 30;
-    
-    // Providers
-    ProviderStatus provider_status = 40;
-    
-    // Auth
-    AuthInfo auth_info = 50;
-    
-    // Errors
-    ErrorResponse error = 100;
-    
-    // Streaming (Session 4B)
-    // ChatToken token = 200;
-    // ChatCompleted completed = 201;
-    // ToolCallEvent tool_call = 202;
+    // Auth (10-14)
+    IpcAuthHandshakeResponse auth_handshake_response = 10;
+
+    // Server Management (15-18)
+    IpcDiscoverServerResponse discover_server_response = 15;
+    IpcSpawnServerResponse spawn_server_response = 16;
+    IpcCheckHealthResponse check_health_response = 17;
+    IpcStopServerResponse stop_server_response = 18;
+
+    // Sessions (20-29) - Uses OpenCode canonical types
+    opencode.session.OcSessionList session_list = 20;
+    opencode.session.OcSessionInfo session_info = 21;
+
+    // Agents (30-39) - Uses OpenCode canonical types
+    opencode.agent.OcAgentList agent_list = 30;
+
+    // Providers (40-49) - Uses OpenCode canonical types
+    IpcProviderStatus provider_status = 40;
+
+    // Auth Operations (50-59) - Uses OpenCode canonical types
+    opencode.auth.OcAuth auth_info = 50;
+
+    // Errors (100+)
+    IpcErrorResponse error = 100;
   }
 }
 
 // ============================================
-// AUTH HANDSHAKE
+// AUTH HANDSHAKE (First message must succeed)
 // ============================================
 
-message AuthHandshake {
-  string token = 1;
+message IpcAuthHandshake {
+  string token = 1;  // Auth token from Blazor
 }
 
-message AuthHandshakeResponse {
-  bool success = 1;
-  optional string error = 2;
-}
-
-// ============================================
-// SESSIONS
-// ============================================
-
-message ListSessionsRequest {}
-
-message CreateSessionRequest {
-  optional string title = 1;
-}
-
-message DeleteSessionRequest {
-  string session_id = 1;
-}
-
-message SessionList {
-  repeated SessionInfo sessions = 1;
-}
-
-message SessionInfo {
-  string id = 1;
-  optional string title = 2;
-  int64 created_at = 3;
-  int64 updated_at = 4;
+message IpcAuthHandshakeResponse {
+  bool success = 1;              // true if token valid
+  optional string error = 2;     // Error message if failed
 }
 
 // ============================================
-// AGENTS
+// SERVER MANAGEMENT (client-core specific)
 // ============================================
 
-message ListAgentsRequest {}
-
-message AgentList {
-  repeated AgentInfo agents = 1;
+// Server info (NOT from OpenCode JSON Schema - client-core specific)
+// Used for: Blazor needs to know server connection details
+message IpcServerInfo {
+  uint32 pid = 1;           // Process ID (for shutdown)
+  uint32 port = 2;          // Port number (for connection)
+  string base_url = 3;      // API base URL (e.g., "http://localhost:3000")
+  string name = 4;          // Display name (e.g., "OpenCode Server - Project X")
+  string command = 5;       // Spawn command (for logging/debugging)
+  bool owned = 6;           // true = we spawned it (kill on exit), false = discovered (leave running)
 }
 
-message AgentInfo {
-  string name = 1;
-  optional string description = 2;
-  optional string mode = 3;
-  bool built_in = 4;
-  optional string color = 5;
+// Discover running OpenCode servers
+message IpcDiscoverServerRequest {}
+
+message IpcDiscoverServerResponse {
+  optional IpcServerInfo server = 1;  // Server if found, null if not running
+}
+
+// Spawn new OpenCode server
+message IpcSpawnServerRequest {
+  optional uint32 port = 1;  // Preferred port (default: 3000)
+}
+
+message IpcSpawnServerResponse {
+  IpcServerInfo server = 1;  // Spawned server info
+}
+
+// Check server health
+message IpcCheckHealthRequest {}
+
+message IpcCheckHealthResponse {
+  bool healthy = 1;  // true if server responding, false otherwise
+}
+
+// Stop OpenCode server (only if owned)
+message IpcStopServerRequest {}
+
+message IpcStopServerResponse {
+  bool success = 1;  // true if stopped, false if not owned or failed
 }
 
 // ============================================
-// PROVIDERS
+// SESSION OPERATIONS
 // ============================================
 
-message GetProviderStatusRequest {}
+message IpcListSessionsRequest {}
 
-message ProviderStatus {
-  repeated string connected = 1;
+message IpcCreateSessionRequest {
+  optional string title = 1;  // Session title (default: generated)
+}
+
+message IpcDeleteSessionRequest {
+  string session_id = 1;  // Session ID to delete
+}
+
+// ============================================
+// AGENT OPERATIONS
+// ============================================
+
+message IpcListAgentsRequest {}
+
+// ============================================
+// PROVIDER OPERATIONS
+// ============================================
+
+message IpcGetProviderStatusRequest {}
+
+// Provider status (simplified - just connected provider IDs)
+message IpcProviderStatus {
+  repeated string connected = 1;  // List of connected provider IDs
 }
 
 // ============================================
 // AUTH OPERATIONS
 // ============================================
 
-message SetAuthRequest {
-  string provider_id = 1;
-  AuthInfo auth = 2;
+message IpcSetAuthRequest {
+  string provider_id = 1;               // Provider to set auth for
+  opencode.auth.OcAuth auth = 2;        // Auth credentials (OAuth, API key, or well-known)
 }
 
-message GetAuthRequest {
-  string provider_id = 1;
-}
-
-message AuthInfo {
-  oneof auth_type {
-    ApiKeyAuth api_key = 1;
-    OAuthAuth oauth = 2;
-  }
-}
-
-message ApiKeyAuth {
-  string key = 1;
-}
-
-message OAuthAuth {
-  string access_token = 1;
-  string refresh_token = 2;
-  int64 expires_at = 3;
+message IpcGetAuthRequest {
+  string provider_id = 1;  // Provider to get auth for
 }
 
 // ============================================
-// ERRORS
+// ERROR RESPONSES
 // ============================================
 
-message ErrorResponse {
-  string code = 1;
-  string message = 2;
+// Error codes for IPC operations
+enum IpcErrorCode {
+  IPC_ERROR_CODE_UNKNOWN = 0;          // Unknown error (should never use)
+  IPC_ERROR_CODE_INVALID_MESSAGE = 1;  // Malformed protobuf or missing payload
+  IPC_ERROR_CODE_NOT_IMPLEMENTED = 2;  // Operation not yet implemented
+  IPC_ERROR_CODE_AUTH_ERROR = 3;       // Authentication problem
+  IPC_ERROR_CODE_INTERNAL_ERROR = 4;   // Internal server error
+  IPC_ERROR_CODE_NO_SERVER = 5;        // No OpenCode server connected
+  IPC_ERROR_CODE_SERVER_ERROR = 6;     // OpenCode server operation failed
+}
+
+message IpcErrorResponse {
+  IpcErrorCode code = 1;   // Error code enum
+  string message = 2;      // Human-readable error message
 }

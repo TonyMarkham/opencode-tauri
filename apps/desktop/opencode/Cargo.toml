@@ -23,7 +23,7 @@ humantime = { workspace = true }
 
 # Workspace dependencies
 client-core = { workspace = true }
-models = { workspace = true }
+common = { workspace = true }
 
 [[test]]
 name = "integration_tests"
