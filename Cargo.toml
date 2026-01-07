@@ -30,6 +30,8 @@ tokio-tungstenite = { version = "0.28.0" }
 futures-util = { version = "0.3.31" }
 uuid = { version = "1.19.0", features = ["v4"] }
 url = { version = "2.5.8" }
+toml ={ version = "0.9.8", features = ["parse"] }
+once_cell = { version = "1.21.3" }
 
 common = { path = "common" }
 client-core = { path = "backend/client-core" }

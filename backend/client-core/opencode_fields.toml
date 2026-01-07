@@ -1,0 +1,62 @@
+# OpenCode JSON ↔ Protobuf Field Name Mappings
+# Source of truth - read by build.rs at compile time
+# See: docs/adr/0004-json-field-name-normalization.md
+#
+# This is a complete explicit mapping of all known OpenCode fields.
+# Source: Session 6.5 Plan - Complete Field Mapping Reference (39 fields total)
+
+[mappings]
+# ============================================
+# ACRONYM FIELDS (ID suffix - 11 fields)
+# ============================================
+"projectID" = "project_id"
+"sessionID" = "session_id"
+"messageID" = "message_id"
+"providerID" = "provider_id"
+"modelID" = "model_id"
+"parentID" = "parent_id"
+"partID" = "part_id"
+"callID" = "call_id"
+"requestID" = "request_id"
+"snapshotID" = "snapshot_id"
+"subtaskID" = "subtask_id"
+
+# ============================================
+# ACRONYM FIELDS (URL suffix - 1 field)
+# ============================================
+"baseURL" = "base_url"
+
+# ============================================
+# EXPLICIT OVERRIDES (Edge cases - 3 fields)
+# ============================================
+"enterpriseUrl" = "enterprise_url"           # Mixed case: "Url" not "URL"
+"experimentalOver200K" = "experimental_over_200_k"  # Numeric suffix with "K"
+"topP" = "top_p"                             # Single letter suffix (statistical parameter)
+
+# ============================================
+# STANDARD CAMELCASE (24 fields)
+# ============================================
+"cacheRead" = "cache_read"
+"cacheWrite" = "cache_write"
+"reasoningEffort" = "reasoning_effort"
+"reasoningSummary" = "reasoning_summary"
+"textVerbosity" = "text_verbosity"
+"serviceTier" = "service_tier"
+"maxToolCalls" = "max_tool_calls"
+"parallelToolCalls" = "parallel_tool_calls"
+"strictJsonSchema" = "strict_json_schema"
+"promptCacheKey" = "prompt_cache_key"
+"safetyIdentifier" = "safety_identifier"
+"previousResponseId" = "previous_response_id"
+"statusCode" = "status_code"
+"isRetryable" = "is_retryable"
+"responseHeaders" = "response_headers"
+"responseBody" = "response_body"
+"apiKey" = "api_key"
+"builtIn" = "built_in"
+"maxOutputTokens" = "max_output_tokens"
+"topLogprobs" = "top_logprobs"
+"thinkingConfig" = "thinking_config"
+"includeThoughts" = "include_thoughts"
+"thinkingBudget" = "thinking_budget"
+"budgetTokens" = "budget_tokens"

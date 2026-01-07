@@ -2,7 +2,7 @@
 
 > **⚠️ CRITICAL: Read [CRITICAL_OPERATING_CONSTRAINTS.md](CRITICAL_OPERATING_CONSTRAINTS.md) before starting this session.**
 
-**Status:** READY TO START  
+**Status:** ✅ COMPLETE (2026-01-07)  
 **Prerequisite:** Session 6 complete  
 **Blocks:** Session 7 (Session Handlers need this to parse OpenCode JSON)
 
@@ -35,25 +35,27 @@ struct OcSessionInfo { project_id: String, session_id: String, cache_read: i32 }
 
 ## Deliverables
 
-| # | Deliverable | Description |
-|---|-------------|-------------|
-| 1 | `opencode_fields.toml` | Configuration: acronym list + explicit overrides |
-| 2 | Modified `build.rs` | Reads TOML, expands rules, generates Rust code |
-| 3 | Generated `field_normalizer.rs` | Lookup tables + transformation functions |
-| 4 | Unit tests | Key transformation + round-trip verification |
+| # | Deliverable | Description | Status |
+|---|-------------|-------------|--------|
+| 1 | `opencode_fields.toml` | Configuration: acronym list + explicit overrides | ✅ Complete |
+| 2 | Modified `build.rs` | Reads TOML, expands rules, generates Rust code | ✅ Complete |
+| 3 | Generated `field_normalizer.rs` | Lookup tables + transformation functions | ✅ Complete |
+| 4 | Unit tests | Key transformation + round-trip verification | ✅ Complete (12 tests) |
 
 ---
 
-## Files to Create/Modify
+## Files Created/Modified
 
-| File | Action |
-|------|--------|
-| `Cargo.toml` (workspace) | Add `toml`, `once_cell` dependencies |
-| `backend/client-core/Cargo.toml` | Add `serde_json`, `once_cell`, build-deps |
-| `backend/client-core/opencode_fields.toml` | Create - config source of truth |
-| `backend/client-core/build.rs` | Modify - add normalizer generation |
-| `backend/client-core/src/lib.rs` | Modify - include generated code |
-| `$OUT_DIR/field_normalizer.rs` | Generated - lookup tables + functions |
+| File | Action | Status |
+|------|--------|--------|
+| `Cargo.toml` (workspace) | Add `toml`, `once_cell` dependencies | ✅ Complete |
+| `backend/client-core/Cargo.toml` | Add `serde_json`, `once_cell`, `serde` build-deps | ✅ Complete |
+| `backend/client-core/opencode_fields.toml` | Create - config source of truth | ✅ Complete |
+| `backend/client-core/build.rs` | Modify - add normalizer generation | ✅ Complete |
+| `backend/client-core/src/field_normalizer.rs` | Create - include! wrapper | ✅ Complete |
+| `backend/client-core/src/lib.rs` | Modify - add field_normalizer module | ✅ Complete |
+| `backend/client-core/src/tests/field_normalizer.rs` | Create - comprehensive test suite | ✅ Complete |
+| `$OUT_DIR/field_normalizer.rs` | Generated - lookup tables + functions | ✅ Complete |
 
 ---
 
@@ -70,11 +72,13 @@ pub fn denormalize_key(key: &str) -> Cow<str>;   // Single key reverse
 
 ## Success Criteria
 
-- [ ] `cargo build -p client-core` succeeds (generates normalizer)
-- [ ] `cargo test -p client-core` passes all tests
-- [ ] Round-trip property: `denormalize(normalize(x)) == x`
-- [ ] Build fails if config has duplicate mappings
-- [ ] `cargo clippy -p client-core` passes
+- [x] `cargo build -p client-core` succeeds (generates normalizer)
+- [x] `cargo test -p client-core` passes all tests (18 unit + 24 integration)
+- [x] Round-trip property: `denormalize(normalize(x)) == x` verified in tests
+- [x] Build fails if config has duplicate mappings (validated in `validate_mappings()`)
+- [x] `cargo clippy -p client-core` passes with no warnings
+
+**Completed:** 2026-01-07
 
 ---
 

@@ -1,5 +1,6 @@
 pub mod discovery;
 pub mod error;
+pub mod field_normalizer;
 pub mod ipc;
 pub mod proto;
 
