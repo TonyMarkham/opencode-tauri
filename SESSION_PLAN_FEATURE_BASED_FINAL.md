@@ -24,7 +24,7 @@
 
 ---
 
-## Completed Sessions (1-5)
+## Completed Sessions (1-6)
 
 | Session | Deliverable | Status |
 |---------|-------------|--------|
@@ -33,12 +33,14 @@
 | 3 | Blazor scaffold + server status UI | DONE |
 | 4 | Proto documentation (72+ JSON schemas) | DONE |
 | 5 | IPC Server - Echo (WebSocket, text/binary echo) | DONE |
+| 6 | IPC Server - Auth + Protobuf + Server Mgmt | DONE |
+| 6.5 | JSON Field Name Normalizer (ADR-0004) | NEXT |
 
-**Current state:** App launches, discovers/spawns server, shows status page. IPC echo server works (needs cleanup folded into Session 6).
+**Current state:** App launches, discovers/spawns server, shows status page. IPC server works with auth, binary protobuf, and server management (discover/spawn/health/stop). Session handlers are stubs (return empty/NOT_IMPLEMENTED). **Blocked:** Session 7 requires JSON normalizer to parse OpenCode responses.
 
 ---
 
-## Phase 1: Communication Foundation (Sessions 5-8)
+## Phase 1: Communication Foundation (Sessions 5-8, including 6.5)
 
 ### Session 5: IPC Server - Echo
 **Demo:** Connect with wscat, send text, receive echo.
@@ -53,28 +55,61 @@
 
 ---
 
-### Session 6: IPC Server - Auth + Protobuf
+### Session 6: IPC Server - Auth + Protobuf ✅ COMPLETE
 **Demo:** Auth handshake works, protobuf messages parse.
 
-- **Apply naming conventions:** Rename existing protos to `Ipc*` and `Oc*` prefixes
-- **Apply naming conventions:** Rename fields to `ipc_*` and `opencode_*`
-- Add auth token validation (first message must be `IpcAuthHandshake`)
-- Switch to binary frames (protobuf)
-- Parse `IpcClientMessage` envelope
-- Send `IpcServerMessage` responses
-- Reject invalid auth
+**Completed (Jan 07 2026):**
+- ✅ All 11 proto files created (74+ OpenCode messages + 20 IPC messages)
+- ✅ Auth state machine (token validation, first-message auth)
+- ✅ Binary protobuf framing (IpcClientMessage/IpcServerMessage)
+- ✅ Server management handlers (discover, spawn, health, stop)
+- ✅ `IpcState` actor pattern for state management
+- ✅ 24 integration tests passing (3 ignored - require actual OpenCode server)
 
-**Success:** Auth handshake succeeds, invalid token rejected
+**Success:** Auth handshake succeeds, invalid token rejected, server mgmt via IPC
+
+---
+
+### Session 6.5: JSON Field Name Normalizer ⏳ NEXT
+**Demo:** OpenCode JSON correctly deserializes to proto types.
+
+**Why:** OpenCode returns JavaScript-style JSON (`projectID`, `sessionID`) but our proto types use snake_case (`project_id`, `session_id`). Standard case-conversion libraries fail on uppercase acronyms. See [ADR-0004](docs/adr/0004-json-field-name-normalization.md).
+
+**Scope:**
+- Create `client-core/opencode_fields.toml` - acronym rules + explicit overrides
+- Modify `client-core/build.rs` - generate normalizer code at compile time
+- Generated code: bidirectional lookup tables + recursive JSON transformation
+- Unit tests for key transformation + round-trip tests
+
+**Key deliverables:**
+1. `opencode_fields.toml` with acronyms `["ID", "URL"]` and edge case overrides
+2. `build.rs` reads TOML, expands acronym rules, generates Rust code
+3. `normalize_json(Value) -> Value` for responses (projectID → project_id)
+4. `denormalize_json(Value) -> Value` for requests (project_id → projectID)
+5. Build-time validation (collision detection, round-trip safety)
+
+**Files:**
+- `client-core/opencode_fields.toml` (create)
+- `client-core/build.rs` (modify)
+- `client-core/src/lib.rs` (include generated code)
+- Generated: `$OUT_DIR/field_normalizer.rs`
+
+**Success:** `cargo build` generates normalizer, unit tests pass, round-trip verified
 
 ---
 
 ### Session 7: IPC Server - Session Handlers
 **Demo:** Can list/create/delete sessions via IPC.
 
+**Scope:**
+- Create `OpencodeClient` HTTP client for OpenCode server communication
 - Implement `IpcListSessions` handler → `GET {opencode_url}/session`
 - Implement `IpcCreateSession` handler → `POST {opencode_url}/session`
 - Implement `IpcDeleteSession` handler → `DELETE {opencode_url}/session/{id}`
-- HTTP client in client-core for OpenCode server calls (`OpencodeClient`)
+- JSON ↔ Proto conversion for session responses
+- Integration tests for session operations
+
+**Files:** `Session_7_Plan.md`, `NEXT_SESSION_PROMPT.md`
 
 **Success:** Create session via wscat, verify in OpenCode server
 
@@ -555,7 +590,7 @@
 
 | Phase | Sessions | Features |
 |-------|----------|----------|
-| 1. Communication | 5-8 | IPC server + client |
+| 1. Communication | 5-8 (incl. 6.5) | IPC server + client + JSON normalizer |
 | 2. Config & Auth | 9-12 | Settings, models, API key sync |
 | 3. Basic Chat | 13-16 | Send/receive messages, streaming |
 | 4. Agents | 17-19 | Agent pane, selection, filtering |
@@ -567,4 +602,4 @@
 | 10. Attachments | 39-42 | Clipboard paste, audio/STT |
 | 11. Ship | 43-45 | Polish and release |
 
-**Total: 41 sessions (Sessions 5-45)**
+**Total: 42 sessions (Sessions 5-45, including 6.5)**

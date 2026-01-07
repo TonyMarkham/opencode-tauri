@@ -36,6 +36,7 @@ These are **absolute requirements** that apply to ALL architecture decisions:
 | [0001](./0001-tauri-blazor-desktop-client.md) | Tauri + Blazor WebAssembly Desktop Client | Accepted | 2026-01-02 | Decision to build desktop client using Tauri (Rust) + Blazor WASM (C#) |
 | [0002](./0002-thin-tauri-layer-principle.md) | Thin Tauri Layer Principle | Accepted | 2026-01-05 | Architectural principle: Tauri is ONLY for webview hosting, all logic lives in client-core |
 | [0003](./0003-websocket-protobuf-ipc.md) | WebSocket + Protobuf IPC | Accepted | 2026-01-05 | Blazor ↔ client-core communication via binary WebSocket with protobuf messages |
+| [0004](./0004-json-field-name-normalization.md) | JSON Field Name Normalization | Accepted | 2026-01-07 | Build-time code generation for OpenCode JSON ↔ Protobuf field name transformation |
 
 ---
 
@@ -118,6 +119,23 @@ These are **absolute requirements** that apply to ALL architecture decisions:
 
 ---
 
+### ADR-0004: JSON Field Name Normalization
+
+**Why:** OpenCode server returns JavaScript-style JSON (`projectID`, `sessionID`) while protobuf/Rust expects snake_case (`project_id`, `session_id`). Standard case-conversion libraries fail on uppercase acronyms.
+
+**Decision:** Build-time code generation from a TOML config file that defines acronym rules and explicit overrides.
+
+**Key points:**
+- Single source of truth: `client-core/opencode_fields.toml`
+- Compile-time validation (invalid config fails build, not runtime)
+- Zero runtime config parsing
+- Bidirectional transformation (normalize responses, denormalize requests)
+- Generated lookup tables for O(1) field name mapping
+
+**Status:** ✅ Accepted
+
+---
+
 ## Deprecated ADRs
 
 None yet.
@@ -135,7 +153,7 @@ None yet.
 When creating a new ADR:
 
 1. **Copy the template:** Use [template.md](./template.md) as starting point
-2. **Number it sequentially** (next available number: 0004)
+2. **Number it sequentially** (next available number: 0005)
 3. **Be specific** about context, decision, and consequences
 4. **Document alternatives** considered and why rejected
 5. **Check universal constraints** (Zero Custom JavaScript, Thin Tauri Layer)
@@ -180,3 +198,4 @@ Use [template.md](./template.md) when creating new ADRs. The template includes:
 - **2026-01-02:** ADR-0001 created (Tauri + Blazor decision)
 - **2026-01-05:** ADR-0002 created (Thin Tauri Layer principle)
 - **2026-01-05:** ADR-0003 created (WebSocket + Protobuf IPC - replaces gRPC plan)
+- **2026-01-07:** ADR-0004 created (JSON Field Name Normalization via build-time code generation)
