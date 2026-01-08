@@ -24,7 +24,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\..\..\proto\server.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\ipc.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_session.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_model.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_provider.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_auth.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_message.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_message_part.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_message_error.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_tool.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_agent.proto" GrpcServices="None" />
+    <Protobuf Include="..\..\..\proto\oc_event.proto" GrpcServices="None" />
   </ItemGroup>
 
   <ItemGroup>

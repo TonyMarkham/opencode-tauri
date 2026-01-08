@@ -13,7 +13,4 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 // Radzen services
 builder.Services.AddRadzenComponents();
 
-// OpenCode services
-builder.Services.AddScoped<IServerService, ServerService>();
-
 await builder.Build().RunAsync();

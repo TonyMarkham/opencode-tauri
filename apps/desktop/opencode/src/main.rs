@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use opencode::commands;
 use opencode::error::OpencodeError;
 use opencode::ipc_config::IpcConfig;
 use opencode::logger::initialize as LoggerInitialize;
@@ -20,12 +19,6 @@ use uuid::Uuid;
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            commands::server::discover_server,
-            commands::server::spawn_server,
-            commands::server::check_health,
-            commands::server::stop_server,
-        ])
         .setup(|app| {
             // Get app data directory for logs
             let log_dir = app
@@ -61,7 +54,7 @@ fn main() {
             let token_clone = auth_token.clone();
 
             // Start IPC server and verify it binds successfully
-            let rt = tokio::runtime::Handle::current();
+            let rt = tauri::async_runtime::handle();
             let _ipc_handle = rt
                 .block_on(async { start_ipc_server(ipc_port, Some(token_clone)).await })
                 .map_err(|e| OpencodeError::Opencode {
