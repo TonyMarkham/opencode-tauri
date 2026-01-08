@@ -24,7 +24,7 @@
 
 ---
 
-## Completed Sessions (1-6)
+## Completed Sessions (1-7)
 
 | Session | Deliverable | Status |
 |---------|-------------|--------|
@@ -35,9 +35,10 @@
 | 5 | IPC Server - Echo (WebSocket, text/binary echo) | DONE |
 | 6 | IPC Server - Auth + Protobuf + Server Mgmt | DONE |
 | 6.5 | JSON Field Name Normalizer (ADR-0004) | DONE |
-| 7 | IPC Server - Session Handlers | NEXT |
+| 7 | IPC Server - Session Handlers | DONE |
+| 8 | C# IPC Client | NEXT |
 
-**Current state:** App launches, discovers/spawns server, shows status page. IPC server works with auth, binary protobuf, and server management (discover/spawn/health/stop). JSON field normalizer ready for OpenCode JSON parsing. Session handlers are stubs (return NOT_IMPLEMENTED).
+**Current state:** App launches, discovers/spawns server, shows status page. IPC server works with auth, binary protobuf, server management, and session operations (list/create/delete). `OpencodeClient` HTTP client communicates with OpenCode server. Field normalizer transforms JSON field names. Blazor still uses Tauri invoke (not yet migrated to WebSocket IPC).
 
 ---
 
@@ -92,40 +93,69 @@
 
 ---
 
-### Session 7: IPC Server - Session Handlers ⏳ NEXT
+### Session 7: IPC Server - Session Handlers ✅ COMPLETE
 **Demo:** Can list/create/delete sessions via IPC.
 
-**Scope:**
-- Create `OpencodeClient` HTTP client module for OpenCode server communication
-- Store `OpencodeClient` in `IpcState` (created when server is set, cleared when stopped)
-- Implement `IpcListSessions` handler → `GET {opencode_url}/session`
-- Implement `IpcCreateSession` handler → `POST {opencode_url}/session`
-- Implement `IpcDeleteSession` handler → `DELETE {opencode_url}/session/{id}`
-- Use field normalizer from Session 6.5 for JSON ↔ Proto conversion
-- Integration tests for session operations
+**Completed (2026-01-08):**
+- ✅ `OpencodeClient` HTTP client module with list/create/delete methods
+- ✅ `OpencodeClient` stored in `IpcState` (created on SetServer, cleared on ClearServer)
+- ✅ `handle_list_sessions` → returns `OcSessionList`
+- ✅ `handle_create_session` → returns `OcSessionInfo`
+- ✅ `handle_delete_session` → returns `IpcDeleteSessionResponse`
+- ✅ Field normalizer integration (normalize_json on all responses)
+- ✅ Proto updated with `IpcDeleteSessionResponse` message
 
-**Key implementation details:**
-- `OpencodeClient` is Clone (reqwest::Client uses Arc internally)
-- State actor creates client on `SetServer`, clears on `ClearServer`
-- Handlers call `state.get_opencode_client()` and return error if None
-- Every JSON response needs `normalize_json()` before deserializing
+**Files modified:**
+- `backend/client-core/src/opencode_client/mod.rs` - HTTP client
+- `backend/client-core/src/error/opencode_client.rs` - Error types
+- `backend/client-core/src/ipc/state.rs` - OpencodeClient integration
+- `backend/client-core/src/ipc/server.rs` - Handler implementations
+- `proto/ipc.proto` - Added IpcDeleteSessionResponse
 
-**Files:** `Session_7_Plan.md`, `NEXT_SESSION_PROMPT.md`
-
-**Success:** Create session via wscat, verify in OpenCode server
+**Success:** Session handlers return real data, not stubs
 
 ---
 
-### Session 8: C# IPC Client
+### Session 8A: Fix Proto & Remove Stale Tauri Commands ⏳ NEXT
+**Demo:** `dotnet build`, `dotnet publish`, `cargo build` all succeed. Stale code removed.
+
+**Problems:**
+1. C# build broken - `Opencode.csproj` references non-existent `server.proto`
+2. Tauri invoke code is redundant - server lifecycle now in IPC server
+
+**Scope:**
+- Replace stale proto reference with actual proto files from `proto/` directory
+- Remove `commands/server.rs` and references in `mod.rs`, `main.rs`
+- Remove `ServerService.cs`, `IServerService.cs`, `TauriCommands.cs`, `TauriConstants.cs`
+- Remove service registration and usage
+
+**Files:** `Session_8A_Plan.md`, `NEXT_SESSION_PROMPT.md`
+
+**Success:** All builds pass, stale code removed. `Home.razor` will be broken (fixed in 8B).
+
+---
+
+### Session 8B: C# IPC Client
 **Demo:** Blazor connects to IPC server, lists sessions in UI.
 
-- Create `IpcClientService.cs` using `System.Net.WebSockets.ClientWebSocket`
-- `IpcAuthHandshake` on connect
-- Background receive loop
-- Protobuf serialization (`Google.Protobuf`)
-- Simple test page showing session list
+**Prerequisite:** Session 8A complete
 
-**Success:** Blazor UI shows list of sessions from OpenCode server
+**Scope:**
+- Create Tauri command to expose IPC config (port + auth token) to Blazor
+- Create `IpcClientService.cs` using `System.Net.WebSockets.ClientWebSocket`
+- `IpcAuthHandshake` on connect (first message with token)
+- Background receive loop for response dispatching
+- Request/response correlation via `request_id`
+- Update Home.razor to show sessions via IPC
+
+**Key context:**
+- `ClientWebSocket` is native C# (no JavaScript required per ADR-0003)
+- One Tauri invoke to get IPC config at startup is acceptable
+- All subsequent communication via WebSocket + binary protobuf
+
+**Files:** `Session_8B_Plan.md`
+
+**Success:** Blazor UI shows list of sessions from OpenCode server via WebSocket IPC
 
 ---
 
