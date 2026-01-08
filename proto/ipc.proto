@@ -68,6 +68,7 @@ message IpcServerMessage {
     // Sessions (20-29) - Uses OpenCode canonical types
     opencode.session.OcSessionList session_list = 20;
     opencode.session.OcSessionInfo session_info = 21;
+    IpcDeleteSessionResponse delete_session_response = 22;
 
     // Agents (30-39) - Uses OpenCode canonical types
     opencode.agent.OcAgentList agent_list = 30;
@@ -153,6 +154,10 @@ message IpcCreateSessionRequest {
 
 message IpcDeleteSessionRequest {
   string session_id = 1;  // Session ID to delete
+}
+
+message IpcDeleteSessionResponse {
+  bool success = 1;
 }
 
 // ============================================

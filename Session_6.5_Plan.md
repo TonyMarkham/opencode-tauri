@@ -4,7 +4,7 @@
 
 **Status:** ✅ COMPLETE (2026-01-07)  
 **Prerequisite:** Session 6 complete  
-**Blocks:** Session 7 (Session Handlers need this to parse OpenCode JSON)
+**Unblocks:** Session 7 (Session Handlers now have field normalizer for OpenCode JSON)
 
 ---
 

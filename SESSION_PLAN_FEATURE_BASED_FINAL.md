@@ -34,9 +34,10 @@
 | 4 | Proto documentation (72+ JSON schemas) | DONE |
 | 5 | IPC Server - Echo (WebSocket, text/binary echo) | DONE |
 | 6 | IPC Server - Auth + Protobuf + Server Mgmt | DONE |
-| 6.5 | JSON Field Name Normalizer (ADR-0004) | NEXT |
+| 6.5 | JSON Field Name Normalizer (ADR-0004) | DONE |
+| 7 | IPC Server - Session Handlers | NEXT |
 
-**Current state:** App launches, discovers/spawns server, shows status page. IPC server works with auth, binary protobuf, and server management (discover/spawn/health/stop). Session handlers are stubs (return empty/NOT_IMPLEMENTED). **Blocked:** Session 7 requires JSON normalizer to parse OpenCode responses.
+**Current state:** App launches, discovers/spawns server, shows status page. IPC server works with auth, binary protobuf, and server management (discover/spawn/health/stop). JSON field normalizer ready for OpenCode JSON parsing. Session handlers are stubs (return NOT_IMPLEMENTED).
 
 ---
 
@@ -70,44 +71,44 @@
 
 ---
 
-### Session 6.5: JSON Field Name Normalizer ⏳ NEXT
+### Session 6.5: JSON Field Name Normalizer ✅ COMPLETE
 **Demo:** OpenCode JSON correctly deserializes to proto types.
 
-**Why:** OpenCode returns JavaScript-style JSON (`projectID`, `sessionID`) but our proto types use snake_case (`project_id`, `session_id`). Standard case-conversion libraries fail on uppercase acronyms. See [ADR-0004](docs/adr/0004-json-field-name-normalization.md).
+**Completed (2026-01-07):**
+- ✅ `opencode_fields.toml` with acronyms `["ID", "URL"]` and edge case overrides
+- ✅ `build.rs` reads TOML, expands acronym rules, generates Rust code
+- ✅ `normalize_json(Value) -> Value` for responses (projectID → project_id)
+- ✅ `denormalize_json(Value) -> Value` for requests (project_id → projectID)
+- ✅ Build-time validation (collision detection, round-trip safety)
+- ✅ 12 unit tests + full integration test suite passing
 
-**Scope:**
-- Create `client-core/opencode_fields.toml` - acronym rules + explicit overrides
-- Modify `client-core/build.rs` - generate normalizer code at compile time
-- Generated code: bidirectional lookup tables + recursive JSON transformation
-- Unit tests for key transformation + round-trip tests
+**Files created/modified:**
+- `client-core/opencode_fields.toml` - Configuration source of truth
+- `client-core/build.rs` - Code generation logic
+- `client-core/src/field_normalizer.rs` - Include wrapper
+- `client-core/src/tests/field_normalizer.rs` - Test suite
 
-**Key deliverables:**
-1. `opencode_fields.toml` with acronyms `["ID", "URL"]` and edge case overrides
-2. `build.rs` reads TOML, expands acronym rules, generates Rust code
-3. `normalize_json(Value) -> Value` for responses (projectID → project_id)
-4. `denormalize_json(Value) -> Value` for requests (project_id → projectID)
-5. Build-time validation (collision detection, round-trip safety)
-
-**Files:**
-- `client-core/opencode_fields.toml` (create)
-- `client-core/build.rs` (modify)
-- `client-core/src/lib.rs` (include generated code)
-- Generated: `$OUT_DIR/field_normalizer.rs`
-
-**Success:** `cargo build` generates normalizer, unit tests pass, round-trip verified
+**Success:** `cargo build`, `cargo test`, `cargo clippy` all pass
 
 ---
 
-### Session 7: IPC Server - Session Handlers
+### Session 7: IPC Server - Session Handlers ⏳ NEXT
 **Demo:** Can list/create/delete sessions via IPC.
 
 **Scope:**
-- Create `OpencodeClient` HTTP client for OpenCode server communication
+- Create `OpencodeClient` HTTP client module for OpenCode server communication
+- Store `OpencodeClient` in `IpcState` (created when server is set, cleared when stopped)
 - Implement `IpcListSessions` handler → `GET {opencode_url}/session`
 - Implement `IpcCreateSession` handler → `POST {opencode_url}/session`
 - Implement `IpcDeleteSession` handler → `DELETE {opencode_url}/session/{id}`
-- JSON ↔ Proto conversion for session responses
+- Use field normalizer from Session 6.5 for JSON ↔ Proto conversion
 - Integration tests for session operations
+
+**Key implementation details:**
+- `OpencodeClient` is Clone (reqwest::Client uses Arc internally)
+- State actor creates client on `SetServer`, clears on `ClearServer`
+- Handlers call `state.get_opencode_client()` and return error if None
+- Every JSON response needs `normalize_json()` before deserializing
 
 **Files:** `Session_7_Plan.md`, `NEXT_SESSION_PROMPT.md`
 

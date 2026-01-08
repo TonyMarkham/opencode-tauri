@@ -18,6 +18,7 @@
 //! - **Simple:** No need to reason about lock ordering or deadlocks
 
 use crate::error::ipc::IpcError;
+use crate::opencode_client::OpencodeClient;
 use crate::proto::IpcServerInfo;
 
 use common::ErrorLocation;
@@ -63,6 +64,9 @@ pub struct IpcState {
 
     /// Track if actor has been initialized
     actor_init: Arc<Mutex<bool>>,
+
+    /// Shared read-only access to OpenCode HTTP client
+    opencode_client: Arc<RwLock<Option<OpencodeClient>>>,
 }
 
 impl IpcState {
@@ -74,6 +78,7 @@ impl IpcState {
             command_tx: Arc::new(Mutex::new(None)),
             server: Arc::new(RwLock::new(None)),
             actor_init: Arc::new(Mutex::new(false)),
+            opencode_client: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -111,6 +116,13 @@ impl IpcState {
         self.server.read().await.clone()
     }
 
+    /// Get current OpenCode client (read-only).
+    ///
+    /// Returns `Some(OpencodeClient)` if connected to a server, or `None` if not.
+    pub async fn get_opencode_client(&self) -> Option<OpencodeClient> {
+        self.opencode_client.read().await.clone()
+    }
+
     /// Ensure actor is spawned (called lazily from async context).
     ///
     /// This is an internal implementation detail. The actor is spawned
@@ -120,13 +132,14 @@ impl IpcState {
         if !*init_guard {
             let (tx, rx) = mpsc::channel(100);
             let server_clone = Arc::clone(&self.server);
+            let client_clone = Arc::clone(&self.opencode_client);
 
             // Store tx BEFORE spawning to avoid race
             let mut tx_guard = self.command_tx.lock().await;
             *tx_guard = Some(tx);
             drop(tx_guard); // Release before spawn
 
-            tokio::spawn(state_actor(rx, server_clone));
+            tokio::spawn(state_actor(rx, server_clone, client_clone));
             *init_guard = true;
             info!("IPC state actor spawned");
         }
@@ -150,6 +163,7 @@ impl Default for IpcState {
 async fn state_actor(
     mut command_rx: mpsc::Receiver<StateCommand>,
     server: Arc<RwLock<Option<IpcServerInfo>>>,
+    opencode_client: Arc<RwLock<Option<OpencodeClient>>>,
 ) {
     info!("IPC state actor started");
 
@@ -170,7 +184,24 @@ async fn state_actor(
                     );
                 }
 
-                *server_write = Some(new_server);
+                *server_write = Some(new_server.clone());
+
+                // Create OpencodeClient
+                match OpencodeClient::new(&new_server.base_url) {
+                    Ok(client) => {
+                        let mut client_write = opencode_client.write().await;
+                        *client_write = Some(client);
+                        info!("Created OpencodeClient for {}", new_server.base_url);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to create OpencodeClient: {} - session operations will fail",
+                            e
+                        );
+                        let mut client_write = opencode_client.write().await;
+                        *client_write = None;
+                    }
+                }
             }
             StateCommand::ClearServer => {
                 let mut server_write = server.write().await;
@@ -182,6 +213,11 @@ async fn state_actor(
                 }
 
                 *server_write = None;
+
+                // Clear OpencodeClient
+                let mut client_write = opencode_client.write().await;
+                *client_write = None;
+                info!("Cleared OpencodeClient");
             }
         }
     }

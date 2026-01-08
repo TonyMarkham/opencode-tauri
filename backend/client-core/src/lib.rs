@@ -4,6 +4,7 @@ pub mod field_normalizer;
 pub mod ipc;
 pub mod proto;
 
+mod opencode_client;
 #[cfg(test)]
 mod tests;
 

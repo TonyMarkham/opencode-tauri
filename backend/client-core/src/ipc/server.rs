@@ -30,9 +30,10 @@ use crate::ipc::handle::IpcServerHandle;
 use crate::ipc::state::{IpcState, StateCommand};
 use crate::proto::IpcErrorCode::{AuthError, InternalError, InvalidMessage, NotImplemented};
 use crate::proto::{
-    IpcAuthHandshakeResponse, IpcCheckHealthResponse, IpcClientMessage, IpcDiscoverServerResponse,
-    IpcErrorCode, IpcErrorResponse, IpcServerMessage, IpcSpawnServerRequest,
-    IpcSpawnServerResponse, IpcStopServerResponse, ipc_client_message, ipc_server_message,
+    IpcAuthHandshakeResponse, IpcCheckHealthResponse, IpcClientMessage, IpcCreateSessionRequest,
+    IpcDeleteSessionRequest, IpcDeleteSessionResponse, IpcDiscoverServerResponse, IpcErrorCode,
+    IpcErrorResponse, IpcServerMessage, IpcSpawnServerRequest, IpcSpawnServerResponse,
+    IpcStopServerResponse, ipc_client_message, ipc_server_message,
 };
 
 use common::ErrorLocation;
@@ -40,6 +41,7 @@ use common::ErrorLocation;
 use std::net::SocketAddr;
 use std::panic::Location;
 
+use crate::proto::session::OcSessionList;
 use futures_util::{SinkExt, StreamExt};
 use log::{error, info, warn};
 use prost::Message as ProstMessage;
@@ -411,33 +413,9 @@ async fn handle_message(
         Payload::StopServer(_req) => handle_stop_server(state, request_id, write).await,
 
         // Sessions (stub)
-        Payload::ListSessions(_) => {
-            send_error_response(
-                write,
-                request_id,
-                NotImplemented,
-                "Sessions not yet implemented",
-            )
-            .await
-        }
-        Payload::CreateSession(_) => {
-            send_error_response(
-                write,
-                request_id,
-                NotImplemented,
-                "Sessions not yet implemented",
-            )
-            .await
-        }
-        Payload::DeleteSession(_) => {
-            send_error_response(
-                write,
-                request_id,
-                NotImplemented,
-                "Sessions not yet implemented",
-            )
-            .await
-        }
+        Payload::ListSessions(_req) => handle_list_sessions(state, request_id, write).await,
+        Payload::CreateSession(req) => handle_create_session(state, request_id, req, write).await,
+        Payload::DeleteSession(req) => handle_delete_session(state, request_id, req, write).await,
 
         // Auth handshake should not appear after initial auth
         Payload::AuthHandshake(_) => {
@@ -625,4 +603,114 @@ async fn send_protobuf_response(
             message: format!("Failed to send response: {e}"),
             location: ErrorLocation::from(Location::caller()),
         })
+}
+
+/// Handle list sessions request.
+async fn handle_list_sessions(
+    state: &IpcState,
+    request_id: u64,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<TcpStream>,
+        Message,
+    >,
+) -> Result<(), IpcError> {
+    info!("Handling list_sessions request");
+
+    let client = state
+        .get_opencode_client()
+        .await
+        .ok_or_else(|| IpcError::Io {
+            message: "No OpenCode server connected".to_string(),
+            location: ErrorLocation::from(Location::caller()),
+        })?;
+
+    let sessions = client.list_sessions().await.map_err(|e| IpcError::Io {
+        message: format!("Failed to list sessions: {e}"),
+        location: ErrorLocation::from(Location::caller()),
+    })?;
+
+    let response = IpcServerMessage {
+        request_id,
+        payload: Some(ipc_server_message::Payload::SessionList(OcSessionList {
+            sessions,
+        })),
+    };
+
+    send_protobuf_response(write, &response).await
+}
+
+/// Handle create session request.
+async fn handle_create_session(
+    state: &IpcState,
+    request_id: u64,
+    req: IpcCreateSessionRequest,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<TcpStream>,
+        Message,
+    >,
+) -> Result<(), IpcError> {
+    info!("Handling create_session request");
+
+    let client = state
+        .get_opencode_client()
+        .await
+        .ok_or_else(|| IpcError::Io {
+            message: "No OpenCode server connected".to_string(),
+            location: ErrorLocation::from(Location::caller()),
+        })?;
+
+    let title = req.title.as_deref();
+
+    let session = client
+        .create_session(title)
+        .await
+        .map_err(|e| IpcError::Io {
+            message: format!("Failed to create session: {e}"),
+            location: ErrorLocation::from(Location::caller()),
+        })?;
+
+    let response = IpcServerMessage {
+        request_id,
+        payload: Some(ipc_server_message::Payload::SessionInfo(session)),
+    };
+
+    send_protobuf_response(write, &response).await
+}
+
+/// Handle delete session request.
+async fn handle_delete_session(
+    state: &IpcState,
+    request_id: u64,
+    req: IpcDeleteSessionRequest,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<TcpStream>,
+        Message,
+    >,
+) -> Result<(), IpcError> {
+    info!("Handling delete_session request: {}", req.session_id);
+
+    let client = state
+        .get_opencode_client()
+        .await
+        .ok_or_else(|| IpcError::Io {
+            message: "No OpenCode server connected".to_string(),
+            location: ErrorLocation::from(Location::caller()),
+        })?;
+
+    let success = client
+        .delete_session(&req.session_id)
+        .await
+        .map_err(|e| IpcError::Io {
+            message: format!("Failed to delete session: {}", e),
+            location: ErrorLocation::from(Location::caller()),
+        })?;
+
+    let response = IpcServerMessage {
+        request_id,
+        payload: Some(ipc_server_message::Payload::DeleteSessionResponse(
+            IpcDeleteSessionResponse { success },
+        )),
+    };
+
+    send_protobuf_response(write, &response).await
 }
