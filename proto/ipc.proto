@@ -48,6 +48,10 @@ message IpcClientMessage {
     // Auth Operations (50-59)
     IpcSetAuthRequest set_auth = 50;
     IpcGetAuthRequest get_auth = 51;
+
+    // Config Operations (60-69)
+    IpcGetConfigRequest get_config = 60;
+    IpcUpdateConfigRequest update_config = 61;
   }
 }
 
@@ -78,6 +82,10 @@ message IpcServerMessage {
 
     // Auth Operations (50-59) - Uses OpenCode canonical types
     opencode.auth.OcAuth auth_info = 50;
+
+    // Config Operations (60-69)  // 🆕 NEW
+    IpcGetConfigResponse get_config_response = 60;  // 🆕 NEW
+    IpcUpdateConfigResponse update_config_response = 61;  // 🆕 NEW
 
     // Errors (100+)
     IpcErrorResponse error = 100;
@@ -208,4 +216,24 @@ enum IpcErrorCode {
 message IpcErrorResponse {
   IpcErrorCode code = 1;   // Error code enum
   string message = 2;      // Human-readable error message
+}
+
+// ============================================
+// CONFIG OPERATIONS
+// ============================================
+
+message IpcGetConfigRequest {}
+
+message IpcGetConfigResponse {
+  string app_config_json = 1;     // JSON-serialized AppConfig
+  string models_config_json = 2;  // JSON-serialized ModelsConfig
+}
+
+message IpcUpdateConfigRequest {
+  string config_json = 1;  // Full AppConfig as JSON (replaces existing)
+}
+
+message IpcUpdateConfigResponse {
+  bool success = 1;
+  optional string error = 2;
 }

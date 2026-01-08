@@ -1,3 +1,4 @@
+pub mod config;
 pub mod discovery;
 pub mod ipc;
 pub mod opencode_client;
@@ -16,4 +17,7 @@ pub enum CoreError {
 
     #[error(transparent)]
     Ws(#[from] ws::WsError),
+
+    #[error(transparent)]
+    Config(#[from] config::ConfigError),
 }

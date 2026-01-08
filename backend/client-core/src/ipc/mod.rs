@@ -26,11 +26,13 @@
 //! - Non-loopback connections rejected
 //! - Authentication token required (generated on server start)
 
+pub mod config_state;
 mod connection_state;
 mod handle;
 mod server;
 mod state;
 
+pub use config_state::{ConfigCommand, ConfigState};
 pub use handle::IpcServerHandle;
 pub use server::start_ipc_server;
 pub use state::{IpcState, StateCommand};

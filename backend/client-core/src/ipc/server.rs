@@ -23,8 +23,10 @@
 //!
 //! WebSocket with binary protobuf frames. See `proto/ipc.proto` for message definitions.
 
+use crate::config::AppConfig;
 use crate::discovery::{process, spawn};
 use crate::error::ipc::IpcError;
+use crate::ipc::config_state::ConfigState;
 use crate::ipc::connection_state::ConnectionState;
 use crate::ipc::handle::IpcServerHandle;
 use crate::ipc::state::{IpcState, StateCommand};
@@ -32,8 +34,9 @@ use crate::proto::IpcErrorCode::{AuthError, InternalError, InvalidMessage, NotIm
 use crate::proto::{
     IpcAuthHandshakeResponse, IpcCheckHealthResponse, IpcClientMessage, IpcCreateSessionRequest,
     IpcDeleteSessionRequest, IpcDeleteSessionResponse, IpcDiscoverServerResponse, IpcErrorCode,
-    IpcErrorResponse, IpcServerMessage, IpcSpawnServerRequest, IpcSpawnServerResponse,
-    IpcStopServerResponse, ipc_client_message, ipc_server_message,
+    IpcErrorResponse, IpcGetConfigRequest, IpcGetConfigResponse, IpcServerMessage,
+    IpcSpawnServerRequest, IpcSpawnServerResponse, IpcStopServerResponse, IpcUpdateConfigRequest,
+    IpcUpdateConfigResponse, ipc_client_message, ipc_server_message,
 };
 
 use common::ErrorLocation;
@@ -86,6 +89,7 @@ use uuid::Uuid;
 pub async fn start_ipc_server(
     ipc_port: u16,
     auth_token: Option<String>,
+    config_state: ConfigState,
 ) -> Result<IpcServerHandle, IpcError> {
     // Generate token if not provided
     let auth_token = auth_token.unwrap_or_else(|| {
@@ -103,7 +107,8 @@ pub async fn start_ipc_server(
         while let Ok((stream, addr)) = listener.accept().await {
             info!("Client connecting from {}", addr);
             let token_clone = auth_token.clone();
-            TokioSpawn(handle_connection(stream, addr, token_clone));
+            let config_clone = config_state.clone();
+            TokioSpawn(handle_connection(stream, addr, token_clone, config_clone));
         }
     });
 
@@ -155,6 +160,7 @@ async fn handle_connection(
     stream: TcpStream,
     addr: SocketAddr,
     auth_token: String,
+    config_state: ConfigState,
 ) -> Result<(), IpcError> {
     // SECURITY: Reject non-loopback connections
     if !addr.ip().is_loopback() {
@@ -258,7 +264,9 @@ async fn handle_connection(
                 // Handle the message
                 let request_id = client_msg.request_id;
                 if let Some(payload) = client_msg.payload {
-                    match handle_message(payload, &ipc_state, request_id, &mut write).await {
+                    match handle_message(payload, &ipc_state, &config_state, request_id, &mut write)
+                        .await
+                    {
                         Ok(_) => {}
                         Err(e) => {
                             error!("Error handling message from {}: {}", addr, e);
@@ -397,6 +405,7 @@ async fn send_error_response(
 async fn handle_message(
     payload: ipc_client_message::Payload,
     state: &IpcState,
+    config_state: &ConfigState,
     request_id: u64,
     write: &mut futures_util::stream::SplitSink<
         tokio_tungstenite::WebSocketStream<TcpStream>,
@@ -416,6 +425,12 @@ async fn handle_message(
         Payload::ListSessions(_req) => handle_list_sessions(state, request_id, write).await,
         Payload::CreateSession(req) => handle_create_session(state, request_id, req, write).await,
         Payload::DeleteSession(req) => handle_delete_session(state, request_id, req, write).await,
+
+        // Config Operations  // 🆕 NEW
+        Payload::GetConfig(_req) => handle_get_config(config_state, request_id, write).await, // 🆕 NEW
+        Payload::UpdateConfig(req) => {
+            handle_update_config(config_state, request_id, req, write).await
+        } // 🆕 NEW
 
         // Auth handshake should not appear after initial auth
         Payload::AuthHandshake(_) => {
@@ -713,4 +728,110 @@ async fn handle_delete_session(
     };
 
     send_protobuf_response(write, &response).await
+}
+
+/// Handle get config request.
+async fn handle_get_config(
+    config_state: &ConfigState,
+    request_id: u64,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<TcpStream>,
+        Message,
+    >,
+) -> Result<(), IpcError> {
+    info!("Handling get_config request");
+
+    let app_config = config_state.get_app_config().await;
+    let models_config = config_state.get_models_config().await;
+
+    // Serialize to JSON
+    let app_config_json = serde_json::to_string(&app_config).map_err(|e| IpcError::Io {
+        message: format!("Failed to serialize app config: {}", e),
+        location: ErrorLocation::from(Location::caller()),
+    })?;
+
+    let models_config_json = serde_json::to_string(&models_config).map_err(|e| IpcError::Io {
+        message: format!("Failed to serialize models config: {}", e),
+        location: ErrorLocation::from(Location::caller()),
+    })?;
+
+    let response = IpcServerMessage {
+        request_id,
+        payload: Some(ipc_server_message::Payload::GetConfigResponse(
+            IpcGetConfigResponse {
+                app_config_json,
+                models_config_json,
+            },
+        )),
+    };
+
+    send_protobuf_response(write, &response).await
+}
+
+/// Handle update config request.
+async fn handle_update_config(
+    config_state: &ConfigState,
+    request_id: u64,
+    req: IpcUpdateConfigRequest,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<TcpStream>,
+        Message,
+    >,
+) -> Result<(), IpcError> {
+    info!("Handling update_config request");
+
+    // Deserialize JSON
+    let new_config: AppConfig = match serde_json::from_str(&req.config_json) {
+        Ok(config) => config,
+        Err(e) => {
+            let error_msg = format!("Invalid config JSON: {}", e);
+            error!("{}", error_msg);
+            let response = IpcServerMessage {
+                request_id,
+                payload: Some(ipc_server_message::Payload::UpdateConfigResponse(
+                    IpcUpdateConfigResponse {
+                        success: false,
+                        error: Some(error_msg),
+                    },
+                )),
+            };
+            return send_protobuf_response(write, &response).await;
+        }
+    };
+
+    // Send update command to actor
+    match config_state
+        .update(crate::ipc::config_state::ConfigCommand::UpdateAppConfig(
+            new_config,
+        ))
+        .await
+    {
+        Ok(_) => {
+            info!("Config updated successfully");
+            let response = IpcServerMessage {
+                request_id,
+                payload: Some(ipc_server_message::Payload::UpdateConfigResponse(
+                    IpcUpdateConfigResponse {
+                        success: true,
+                        error: None,
+                    },
+                )),
+            };
+            send_protobuf_response(write, &response).await
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to update config: {}", e);
+            error!("{}", error_msg);
+            let response = IpcServerMessage {
+                request_id,
+                payload: Some(ipc_server_message::Payload::UpdateConfigResponse(
+                    IpcUpdateConfigResponse {
+                        success: false,
+                        error: Some(error_msg),
+                    },
+                )),
+            };
+            send_protobuf_response(write, &response).await
+        }
+    }
 }
