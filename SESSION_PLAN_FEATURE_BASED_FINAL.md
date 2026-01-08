@@ -24,7 +24,7 @@
 
 ---
 
-## Completed Sessions (1-7)
+## Completed Sessions (1-8)
 
 | Session | Deliverable | Status |
 |---------|-------------|--------|
@@ -36,22 +36,24 @@
 | 6 | IPC Server - Auth + Protobuf + Server Mgmt | DONE |
 | 6.5 | JSON Field Name Normalizer (ADR-0004) | DONE |
 | 7 | IPC Server - Session Handlers | DONE |
-| 8 | C# IPC Client | NEXT |
+| 8A | Fix Proto & Remove Stale Tauri Commands | DONE |
+| 8B | C# IPC Client | DONE |
 
-**Current state:** App launches, discovers/spawns server, shows status page. IPC server works with auth, binary protobuf, server management, and session operations (list/create/delete). `OpencodeClient` HTTP client communicates with OpenCode server. Field normalizer transforms JSON field names. Blazor still uses Tauri invoke (not yet migrated to WebSocket IPC).
+**Current state:** App launches, Blazor connects to IPC server via WebSocket, authenticates, and displays sessions from OpenCode server. Full IPC pipeline working: Blazor → WebSocket → client-core → OpenCode HTTP API. Phase 1 (Communication Foundation) is **COMPLETE**.
 
 ---
 
-## Phase 1: Communication Foundation (Sessions 5-8, including 6.5)
+## Phase 1: Communication Foundation (Sessions 5-8, including 6.5) ✅ COMPLETE
 
-### Session 5: IPC Server - Echo
+### Session 5: IPC Server - Echo ✅ COMPLETE
 **Demo:** Connect with wscat, send text, receive echo.
 
-- Create `backend/client-core/src/ipc/server.rs`
-- Bind to `127.0.0.1:{ipc_port}`
-- Accept connections
-- Echo received text back
-- Plain text, no protobuf yet
+**Completed:**
+- ✅ Created `backend/client-core/src/ipc/server.rs`
+- ✅ Binds to `127.0.0.1:{ipc_port}`
+- ✅ Accepts connections
+- ✅ Echoes received text back
+- ✅ Plain text protocol (extended to binary protobuf in Session 6)
 
 **Success:** `wscat -c ws://127.0.0.1:{ipc_port}` → send "hello" → receive "hello"
 
@@ -116,44 +118,46 @@
 
 ---
 
-### Session 8A: Fix Proto & Remove Stale Tauri Commands ⏳ NEXT
+### Session 8A: Fix Proto & Remove Stale Tauri Commands ✅ COMPLETE
 **Demo:** `dotnet build`, `dotnet publish`, `cargo build` all succeed. Stale code removed.
 
-**Problems:**
-1. C# build broken - `Opencode.csproj` references non-existent `server.proto`
-2. Tauri invoke code is redundant - server lifecycle now in IPC server
+**Completed (2026-01-08):**
+- ✅ Replaced stale `server.proto` reference with actual proto files from `proto/` directory
+- ✅ Removed `commands/server.rs` and references in `mod.rs`, `main.rs`
+- ✅ Removed `ServerService.cs`, `IServerService.cs`, `TauriCommands.cs`, `TauriConstants.cs`
+- ✅ Removed service registration and usage
 
-**Scope:**
-- Replace stale proto reference with actual proto files from `proto/` directory
-- Remove `commands/server.rs` and references in `mod.rs`, `main.rs`
-- Remove `ServerService.cs`, `IServerService.cs`, `TauriCommands.cs`, `TauriConstants.cs`
-- Remove service registration and usage
-
-**Files:** `Session_8A_Plan.md`, `NEXT_SESSION_PROMPT.md`
-
-**Success:** All builds pass, stale code removed. `Home.razor` will be broken (fixed in 8B).
+**Success:** All builds pass, stale code removed
 
 ---
 
-### Session 8B: C# IPC Client
+### Session 8B: C# IPC Client ✅ COMPLETE
 **Demo:** Blazor connects to IPC server, lists sessions in UI.
 
-**Prerequisite:** Session 8A complete
+**Completed (2026-01-08):**
+- ✅ `get_ipc_config` Tauri command exposes port + auth token to Blazor
+- ✅ `IpcClient.cs` - Production-grade WebSocket client (~537 lines)
+  - Thread-safe WebSocket management (`SemaphoreSlim`)
+  - Binary protobuf encoding/decoding
+  - Auth handshake (request_id: 1)
+  - Request/response correlation (`ConcurrentDictionary`)
+  - Background receive loop with fragmented message handling
+  - Timeout + cancellation support
+  - Graceful disposal
+- ✅ `IpcConfigService.cs` - Gets port + token from Tauri
+- ✅ `IpcClientOptions.cs` - Configurable timeouts
+- ✅ `IpcClientMetrics.cs` - Telemetry with `System.Diagnostics.Metrics`
+- ✅ `ConnectionState.cs` - State enum + events
+- ✅ `IpcException.cs` - Structured exception hierarchy
+- ✅ `Home.razor` - UI with loading states, error handling, retry button
+- ✅ `Program.cs` - DI registration (singletons)
 
-**Scope:**
-- Create Tauri command to expose IPC config (port + auth token) to Blazor
-- Create `IpcClientService.cs` using `System.Net.WebSockets.ClientWebSocket`
-- `IpcAuthHandshake` on connect (first message with token)
-- Background receive loop for response dispatching
-- Request/response correlation via `request_id`
-- Update Home.razor to show sessions via IPC
-
-**Key context:**
-- `ClientWebSocket` is native C# (no JavaScript required per ADR-0003)
-- One Tauri invoke to get IPC config at startup is acceptable
-- All subsequent communication via WebSocket + binary protobuf
-
-**Files:** `Session_8B_Plan.md`
+**Files created/modified:**
+- `apps/desktop/opencode/src/tauri_commands/ipc_config_response.rs` - Tauri command
+- `frontend/desktop/opencode/Services/*.cs` - 7 new service files
+- `frontend/desktop/opencode/Services/Exceptions/*.cs` - Exception hierarchy
+- `frontend/desktop/opencode/Pages/Home.razor` - Session list UI
+- `frontend/desktop/opencode/Program.cs` - DI registration
 
 **Success:** Blazor UI shows list of sessions from OpenCode server via WebSocket IPC
 
@@ -619,18 +623,19 @@
 
 ## Summary
 
-| Phase | Sessions | Features |
-|-------|----------|----------|
-| 1. Communication | 5-8 (incl. 6.5) | IPC server + client + JSON normalizer |
-| 2. Config & Auth | 9-12 | Settings, models, API key sync |
-| 3. Basic Chat | 13-16 | Send/receive messages, streaming |
-| 4. Agents | 17-19 | Agent pane, selection, filtering |
-| 5. Tools | 20-24 | Tool display, permissions, cancellation |
-| 6. Multi-Tab | 25-27 | Tab bar, isolation, rename |
-| 7. Advanced Auth | 28-30 | Provider status, OAuth toggle, countdown |
-| 8. Model Discovery | 31-33 | Dynamic model fetching |
-| 9. Rendering | 34-38 | Markdown, syntax, reasoning, tokens |
-| 10. Attachments | 39-42 | Clipboard paste, audio/STT |
-| 11. Ship | 43-45 | Polish and release |
+| Phase | Sessions | Features | Status |
+|-------|----------|----------|--------|
+| 1. Communication | 5-8 (incl. 6.5) | IPC server + client + JSON normalizer | ✅ COMPLETE |
+| 2. Config & Auth | 9-12 | Settings, models, API key sync | ⏳ NEXT |
+| 3. Basic Chat | 13-16 | Send/receive messages, streaming | |
+| 4. Agents | 17-19 | Agent pane, selection, filtering | |
+| 5. Tools | 20-24 | Tool display, permissions, cancellation | |
+| 6. Multi-Tab | 25-27 | Tab bar, isolation, rename | |
+| 7. Advanced Auth | 28-30 | Provider status, OAuth toggle, countdown | |
+| 8. Model Discovery | 31-33 | Dynamic model fetching | |
+| 9. Rendering | 34-38 | Markdown, syntax, reasoning, tokens | |
+| 10. Attachments | 39-42 | Clipboard paste, audio/STT | |
+| 11. Ship | 43-45 | Polish and release | |
 
 **Total: 42 sessions (Sessions 5-45, including 6.5)**
+**Progress: Phase 1 complete (Sessions 5-8B) - 6 sessions done**
