@@ -34,9 +34,9 @@ use crate::proto::IpcErrorCode::{AuthError, InternalError, InvalidMessage, NotIm
 use crate::proto::{
     IpcAuthHandshakeResponse, IpcCheckHealthResponse, IpcClientMessage, IpcCreateSessionRequest,
     IpcDeleteSessionRequest, IpcDeleteSessionResponse, IpcDiscoverServerResponse, IpcErrorCode,
-    IpcErrorResponse, IpcGetConfigRequest, IpcGetConfigResponse, IpcServerMessage,
-    IpcSpawnServerRequest, IpcSpawnServerResponse, IpcStopServerResponse, IpcUpdateConfigRequest,
-    IpcUpdateConfigResponse, ipc_client_message, ipc_server_message,
+    IpcErrorResponse, IpcGetConfigResponse, IpcServerMessage, IpcSpawnServerRequest,
+    IpcSpawnServerResponse, IpcStopServerResponse, IpcUpdateConfigRequest, IpcUpdateConfigResponse,
+    ipc_client_message, ipc_server_message,
 };
 
 use common::ErrorLocation;

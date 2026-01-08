@@ -1,9 +1,8 @@
 use crate::ipc_tests::helpers::{
     TEST_AUTH_TOKEN, authenticate, connect_to_server, is_connection_closed, receive_protobuf,
-    send_protobuf,
+    send_protobuf, start_test_ipc_server,
 };
 
-use client_core::ipc::start_ipc_server;
 use client_core::proto::{
     IpcClientMessage, IpcListSessionsRequest, IpcServerMessage, ipc_client_message,
 };
@@ -24,7 +23,7 @@ use client_core::proto::{
 async fn given_authenticated_when_send_message_then_receives_response() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19876;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -67,7 +66,7 @@ async fn given_authenticated_when_send_message_then_receives_response() {
 async fn given_authenticated_when_send_binary_protobuf_then_receives_response() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19877;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -112,7 +111,7 @@ async fn given_authenticated_when_send_binary_protobuf_then_receives_response() 
 async fn given_authenticated_when_send_multiple_messages_then_receives_all_responses() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19878;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -161,7 +160,7 @@ async fn given_authenticated_when_send_multiple_messages_then_receives_all_respo
 async fn given_valid_token_when_auth_handshake_then_success() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19880;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -197,7 +196,7 @@ async fn given_valid_token_when_auth_handshake_then_success() {
 async fn given_invalid_token_when_auth_handshake_then_rejected() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19881;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -230,7 +229,7 @@ async fn given_invalid_token_when_auth_handshake_then_rejected() {
 async fn given_non_auth_first_message_when_connect_then_rejected() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19882;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -270,7 +269,7 @@ async fn given_non_auth_first_message_when_connect_then_rejected() {
 async fn given_authenticated_when_send_message_then_accepted() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19883;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -310,7 +309,7 @@ async fn given_authenticated_when_send_message_then_accepted() {
 async fn given_authenticated_when_send_second_auth_then_error() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19884;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -360,7 +359,7 @@ async fn given_authenticated_when_send_second_auth_then_error() {
 async fn given_authenticated_when_discover_server_then_returns_result() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19885;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -408,7 +407,7 @@ async fn given_authenticated_when_discover_server_then_returns_result() {
 async fn given_authenticated_when_spawn_server_then_returns_info() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19886;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -459,7 +458,7 @@ async fn given_authenticated_when_spawn_server_then_returns_info() {
 async fn given_authenticated_and_server_when_check_health_then_returns_status() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19887;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 
@@ -520,7 +519,7 @@ async fn given_authenticated_and_server_when_check_health_then_returns_status() 
 async fn given_authenticated_and_server_when_stop_server_then_succeeds() {
     // GIVEN: IPC server running on test port
     let ipc_port = 19888;
-    let _handle = start_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
+    let _handle = start_test_ipc_server(ipc_port, Some(String::from(TEST_AUTH_TOKEN)))
         .await
         .expect("Failed to start IPC server");
 

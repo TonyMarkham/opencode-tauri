@@ -167,15 +167,32 @@
 
 **Why this phase comes before chat:** You can't send a message without a model selected and auth configured.
 
-### Session 9: Config Loading
+### Session 9: Config Loading ✅ COMPLETE
 **Demo:** App loads settings from disk on startup.
 
-- Create `AppConfig` class (mirrors egui's config.json)
-- Create `ModelsConfig` class (mirrors egui's models.toml)
-- Load on startup, save on change
-- Platform-specific paths (use Tauri app data directory)
+**Completed (2026-01-08):**
+- ✅ `AppConfig` module with JSON persistence and atomic writes
+- ✅ `ModelsConfig` module with TOML parsing and multi-path fallback
+- ✅ `ConfigState` actor for thread-safe config management
+- ✅ Config error types with proper context and location tracking
+- ✅ IPC handlers for `get_config` and `update_config` operations
+- ✅ Validation for config values (bounds, URL format, version)
+- ✅ Bundled `models.toml` with 4 providers (OpenAI, Anthropic, Google, OpenRouter)
+- ✅ Graceful degradation with defaults on missing/corrupt config
 
-**Success:** Change setting, restart app, setting persists
+**Files created:**
+- `backend/client-core/src/config/mod.rs` - AppConfig with validation
+- `backend/client-core/src/config/models.rs` - ModelsConfig with TOML parsing
+- `backend/client-core/src/error/config.rs` - Config error types
+- `backend/client-core/src/ipc/config_state.rs` - ConfigState actor
+- `apps/desktop/opencode/config/models.toml` - Bundled default models
+
+**Files modified:**
+- `apps/desktop/opencode/src/main.rs` - Load config at startup
+- `backend/client-core/src/ipc/server.rs` - Add config handlers
+- `proto/ipc.proto` - Add config messages
+
+**Success:** Config loads at startup, persists changes, falls back gracefully
 
 ---
 
@@ -626,7 +643,7 @@
 | Phase | Sessions | Features | Status |
 |-------|----------|----------|--------|
 | 1. Communication | 5-8 (incl. 6.5) | IPC server + client + JSON normalizer | ✅ COMPLETE |
-| 2. Config & Auth | 9-12 | Settings, models, API key sync | ⏳ NEXT |
+| 2. Config & Auth | 9-12 | Settings, models, API key sync | 🔄 IN PROGRESS (Session 9 done) |
 | 3. Basic Chat | 13-16 | Send/receive messages, streaming | |
 | 4. Agents | 17-19 | Agent pane, selection, filtering | |
 | 5. Tools | 20-24 | Tool display, permissions, cancellation | |
@@ -638,4 +655,4 @@
 | 11. Ship | 43-45 | Polish and release | |
 
 **Total: 42 sessions (Sessions 5-45, including 6.5)**
-**Progress: Phase 1 complete (Sessions 5-8B) - 6 sessions done**
+**Progress: Phase 1 complete + Session 9 done = 7 implementation sessions completed**

@@ -6,6 +6,8 @@
 //! - Authentication helpers
 //! - Connection state checks
 
+use client_core::config::{AppConfig, ModelsConfig};
+use client_core::ipc::{ConfigState, start_ipc_server, IpcServerHandle};
 use client_core::proto::{
     IpcAuthHandshake, IpcAuthHandshakeResponse, IpcClientMessage, IpcServerMessage,
     ipc_client_message, ipc_server_message,
@@ -13,11 +15,30 @@ use client_core::proto::{
 
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
+use std::path::PathBuf;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 
 /// Test constants for authentication
 pub const TEST_AUTH_TOKEN: &str = "test-token-12345";
+
+/// Test helper: Create a test ConfigState with defaults.
+pub fn create_test_config_state() -> ConfigState {
+    ConfigState::new(
+        PathBuf::from("/tmp/opencode-test"),
+        AppConfig::default(),
+        ModelsConfig::default(),
+    )
+}
+
+/// Test helper: Start IPC server with test config state.
+pub async fn start_test_ipc_server(
+    ipc_port: u16,
+    auth_token: Option<String>,
+) -> Result<IpcServerHandle, client_core::error::ipc::IpcError> {
+    let config_state = create_test_config_state();
+    start_ipc_server(ipc_port, auth_token, config_state).await
+}
 
 /// Test helper: Connect to IPC server and return WebSocket stream.
 pub async fn connect_to_server(ipc_port: u16) -> WebSocketStream<MaybeTlsStream<TcpStream>> {

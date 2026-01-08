@@ -1,348 +1,293 @@
-# Next Session: Session 9 - Config Loading
+# Next Session: Session 10 - Settings Panel (Server Section)
 
 ## Quick Context
 
-**What We Completed (Phase 1 - Sessions 5-8B):**
+**What We Completed (Sessions 5-9):**
 
 - ✅ IPC WebSocket server with binary protobuf protocol
-- ✅ Auth handshake and token validation
-- ✅ Session handlers (list/create/delete)
+- ✅ Session handlers (list/create/delete) via OpenCode HTTP API
 - ✅ C# IPC client with production-grade WebSocket management
-- ✅ Home.razor displaying sessions via IPC
-- ✅ Full pipeline: Blazor → WebSocket → client-core → OpenCode HTTP API
+- ✅ Home.razor displaying sessions using Radzen components
+- ✅ Config management system with IPC handlers
 
 **Current State:**
 
-- App launches and connects to IPC server
-- Blazor authenticates and displays sessions
-- **BUT:** No configuration loading yet (hardcoded values, no persistence)
+- App launches, loads config, connects to IPC server via WebSocket
+- Blazor authenticates and can list/create/delete sessions
+- Config is available via IPC (get_config/update_config)
+- **BUT:** No UI for settings - users can't see server status or start/stop servers
 
 ---
 
-## Your Mission: Session 9
+## Your Mission: Session 10
 
-Implement configuration loading so the app:
-1. Loads user preferences from `config.json` on startup
-2. Loads model/provider definitions from bundled `models.toml`
-3. Exposes config to Blazor via IPC
-4. Persists config changes to disk
-
-### Architecture (Per ADR-0002)
-
-```
-Tauri main.rs
-    ├── Get config_dir from app.path().app_config_dir()
-    ├── Get resource_dir from app.path().resource_dir()
-    └── Pass paths to client-core
-
-client-core config module
-    ├── AppConfig::load(config_dir) → config.json
-    ├── ModelsConfig::load(resource_dir) → models.toml
-    └── ConfigManager for state management
-
-IPC Server
-    └── Handle IpcGetConfig, IpcUpdateConfig messages
-
-Blazor
-    └── Fetch config at startup, update UI
-```
+Create a Settings modal dialog with a Server section that displays:
+- Connection status (icon + text)
+- Server URL, PID, Owned status
+- Buttons: Refresh, Start Server, Stop Server
 
 ---
 
-## Step 1: Create config module in client-core
+## Implementation Plan
 
-**Goal:** Define config structs with load/save functionality
+### Step 1: Add Server Methods to IIpcClient Interface
 
-**Files to create:**
-- `backend/client-core/src/config/mod.rs`
-- `backend/client-core/src/config/models.rs`
-- `backend/client-core/src/config/error.rs`
+**File:** `frontend/desktop/opencode/Services/IIpcClient.cs`
 
-**AppConfig structure:**
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppConfig {
-    #[serde(default)]
-    pub server: ServerConfig,
-    #[serde(default)]
-    pub ui: UiPreferences,
-    #[serde(default)]
-    pub audio: AudioConfig,
-}
+**Add after `DeleteSessionAsync`:**
+```csharp
+// Server management operations
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    pub last_opencode_url: Option<String>,
-    #[serde(default = "default_auto_start")]
-    pub auto_start: bool,
-    pub directory_override: Option<String>,
-}
+/// <summary>
+/// Discovers running OpenCode servers.
+/// </summary>
+/// <returns>Server info if found, null if no server running.</returns>
+Task<IpcServerInfo?> DiscoverServerAsync(CancellationToken cancellationToken = default);
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum FontSizePreset {
-    Small,
-    Standard,
-    Large,
-}
+/// <summary>
+/// Spawns a new OpenCode server.
+/// </summary>
+/// <param name="port">Preferred port (optional).</param>
+/// <returns>Spawned server info.</returns>
+Task<IpcServerInfo> SpawnServerAsync(uint? port = null, CancellationToken cancellationToken = default);
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ChatDensity {
-    Compact,
-    Normal,
-    Comfortable,
-}
+/// <summary>
+/// Stops the OpenCode server (only works if we spawned it).
+/// </summary>
+/// <returns>True if stopped successfully.</returns>
+Task<bool> StopServerAsync(CancellationToken cancellationToken = default);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UiPreferences {
-    #[serde(default)]
-    pub font_size: FontSizePreset,
-    #[serde(default = "default_base_font_points")]
-    pub base_font_points: f32,
-    #[serde(default)]
-    pub chat_density: ChatDensity,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AudioConfig {
-    #[serde(default = "default_push_to_talk_key")]
-    pub push_to_talk_key: String,
-    pub whisper_model_path: Option<String>,
-}
+/// <summary>
+/// Checks if the OpenCode server is healthy.
+/// </summary>
+/// <returns>True if server is responding.</returns>
+Task<bool> CheckServerHealthAsync(CancellationToken cancellationToken = default);
 ```
 
-**Key methods:**
-```rust
-impl AppConfig {
-    pub fn load(config_dir: &Path) -> Result<Self, ConfigError>;
-    pub fn save(&self, config_dir: &Path) -> Result<(), ConfigError>;
-}
-```
-
-**Reference:** See `submodules/opencode-egui/src/config/mod.rs` for patterns
+**Verification:** `dotnet build` should fail (IpcClient doesn't implement new methods yet)
 
 ---
 
-## Step 2: Create ModelsConfig
+### Step 2: Implement Server Methods in IpcClient
 
-**Goal:** Parse models.toml for provider and model definitions
+**File:** `frontend/desktop/opencode/Services/IpcClient.cs`
 
-**ModelsConfig structure:**
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelsConfig {
-    #[serde(default)]
-    pub providers: Vec<ProviderConfig>,
-    #[serde(default)]
-    pub models: ModelsSection,
+**Add after `DeleteSessionAsync` method (~line 479):**
+
+```csharp
+public async Task<IpcServerInfo?> DiscoverServerAsync(CancellationToken cancellationToken = default)
+{
+    var request = new IpcClientMessage
+    {
+        DiscoverServer = new IpcDiscoverServerRequest()
+    };
+
+    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+    return response.DiscoverServerResponse?.Server;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderConfig {
-    pub name: String,
-    pub display_name: String,
-    pub api_key_env: String,
-    pub models_url: String,
-    pub auth_type: String,
-    #[serde(default)]
-    pub auth_header: Option<String>,
-    #[serde(default)]
-    pub auth_param: Option<String>,
-    #[serde(default)]
-    pub extra_headers: HashMap<String, String>,
-    pub response_format: ResponseFormat,
+public async Task<IpcServerInfo> SpawnServerAsync(uint? port = null, CancellationToken cancellationToken = default)
+{
+    var request = new IpcClientMessage
+    {
+        SpawnServer = new IpcSpawnServerRequest { Port = port ?? 0 }
+    };
+
+    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+    return response.SpawnServerResponse.Server;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CuratedModel {
-    pub name: String,
-    pub provider: String,
-    pub model_id: String,
+public async Task<bool> StopServerAsync(CancellationToken cancellationToken = default)
+{
+    var request = new IpcClientMessage
+    {
+        StopServer = new IpcStopServerRequest()
+    };
+
+    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+    return response.StopServerResponse.Success;
+}
+
+public async Task<bool> CheckServerHealthAsync(CancellationToken cancellationToken = default)
+{
+    var request = new IpcClientMessage
+    {
+        CheckHealth = new IpcCheckHealthRequest()
+    };
+
+    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+    return response.CheckHealthResponse.Healthy;
 }
 ```
 
-**Reference:** See `submodules/opencode-egui/src/config/models.rs`
+**Verification:** `dotnet build` should succeed
 
 ---
 
-## Step 3: Integrate with Tauri startup
+### Step 3: Create Components Directory
 
-**Goal:** Load config during app initialization
+**Create directory:** `frontend/desktop/opencode/Components/`
 
-**Modify:** `apps/desktop/opencode/src/main.rs`
-
-Add after IPC server startup:
-```rust
-// Get platform-specific paths
-let config_dir = app.path().app_config_dir()?;
-let resource_dir = app.path().resource_dir()?;
-
-// Load configs
-let app_config = client_core::config::AppConfig::load(&config_dir)
-    .unwrap_or_else(|e| {
-        warn!("Config load failed, using defaults: {e}");
-        client_core::config::AppConfig::default()
-    });
-
-info!("Config loaded: auto_start={}, font_size={:?}", 
-    app_config.server.auto_start, app_config.ui.font_size);
-
-// Store in Tauri state
-app.manage(ConfigState::new(config_dir, app_config));
+```bash
+mkdir -p frontend/desktop/opencode/Components
 ```
 
 ---
 
-## Step 4: Add IPC handlers for config
+### Step 4: Create ServerSection Component
 
-**Goal:** Allow Blazor to fetch and update config via WebSocket
+**File to create:** `frontend/desktop/opencode/Components/ServerSection.razor`
 
-**Add to `proto/ipc.proto`:**
+This component displays server status and provides control buttons.
+
+**Key elements:**
+- Status row with icon (green=connected, gray=disconnected, yellow=unhealthy)
+- URL, PID, Owned rows (only shown when connected)
+- Error alert (dismissible)
+- Button row: Refresh, Start Server, Stop Server
+- Loading progress bar
+
+**Pattern to follow:** Copy error handling and async patterns from `Home.razor`
+
+**See `Session_10_Plan.md` for complete component code.**
+
+---
+
+### Step 5: Create SettingsModal Component
+
+**File to create:** `frontend/desktop/opencode/Components/SettingsModal.razor`
+
+Simple modal shell using RadzenDialog:
+- Title: "Settings"
+- Contains: ServerSection component
+- Has Show()/Hide() methods for parent to call
+
+**See `Session_10_Plan.md` for complete component code.**
+
+---
+
+### Step 6: Update _Imports.razor
+
+**File:** `frontend/desktop/opencode/_Imports.razor`
+
+**Add:**
+```razor
+@using OpenCode.Components
+```
+
+---
+
+### Step 7: Add Settings Button to MainLayout
+
+**File:** `frontend/desktop/opencode/Layout/MainLayout.razor`
+
+**Modify to:**
+1. Add a settings button (gear icon) in top-row
+2. Add SettingsModal component reference
+3. Wire button click to show modal
+
+```razor
+@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <RadzenButton 
+                Icon="settings" 
+                ButtonStyle="ButtonStyle.Light" 
+                Variant="Variant.Text"
+                Click="@(() => _settingsModal?.Show())"
+                title="Settings" />
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<SettingsModal @ref="_settingsModal" />
+
+@code {
+    private SettingsModal? _settingsModal;
+}
+```
+
+---
+
+## Proto Message Reference
+
+The proto messages you'll use are already defined in `proto/ipc.proto`:
+
 ```protobuf
-// In IpcClientMessage oneof:
-IpcGetConfigRequest get_config = 20;
-IpcUpdateConfigRequest update_config = 21;
+// IpcClientMessage.payload options:
+IpcDiscoverServerRequest discover_server = 15;
+IpcSpawnServerRequest spawn_server = 16;
+IpcCheckHealthRequest check_health = 17;
+IpcStopServerRequest stop_server = 18;
 
-// In IpcServerMessage oneof:
-IpcGetConfigResponse config = 20;
-IpcUpdateConfigResponse update_config_response = 21;
+// IpcServerMessage.payload options:
+IpcDiscoverServerResponse discover_server_response = 15;
+IpcSpawnServerResponse spawn_server_response = 16;
+IpcCheckHealthResponse check_health_response = 17;
+IpcStopServerResponse stop_server_response = 18;
 
-message IpcGetConfigRequest {}
-
-message IpcGetConfigResponse {
-    string app_config_json = 1;  // JSON serialized AppConfig
-    string models_config_json = 2;  // JSON serialized ModelsConfig
-}
-
-message IpcUpdateConfigRequest {
-    string config_json = 1;  // Partial config update as JSON
-}
-
-message IpcUpdateConfigResponse {
-    bool success = 1;
-    string error = 2;
-}
-```
-
-**Note:** Using JSON inside proto messages for flexibility with complex nested config.
-
----
-
-## Step 5: Create C# config types
-
-**Goal:** Define C# classes matching Rust config
-
-**File:** `frontend/desktop/opencode/Services/Config/AppConfig.cs`
-
-```csharp
-public class AppConfig
-{
-    public ServerConfig Server { get; set; } = new();
-    public UiPreferences Ui { get; set; } = new();
-    public AudioConfig Audio { get; set; } = new();
-}
-
-public class ServerConfig
-{
-    public string? LastOpencodeUrl { get; set; }
-    public bool AutoStart { get; set; } = true;
-    public string? DirectoryOverride { get; set; }
-}
-
-public enum FontSizePreset { Small, Standard, Large }
-public enum ChatDensity { Compact, Normal, Comfortable }
-
-public class UiPreferences
-{
-    public FontSizePreset FontSize { get; set; } = FontSizePreset.Standard;
-    public float BaseFontPoints { get; set; } = 14.0f;
-    public ChatDensity ChatDensity { get; set; } = ChatDensity.Normal;
+// Server info structure:
+message IpcServerInfo {
+  uint32 pid = 1;
+  uint32 port = 2;
+  string base_url = 3;
+  string name = 4;
+  string command = 5;
+  bool owned = 6;  // true = we spawned it
 }
 ```
 
 ---
 
-## Step 6: Add config to IIpcClient
+## Success Criteria
 
-**Goal:** Extend IPC client with config operations
-
-**Add to `IIpcClient.cs`:**
-```csharp
-Task<(AppConfig App, ModelsConfig Models)> GetConfigAsync(CancellationToken ct = default);
-Task UpdateConfigAsync(AppConfig config, CancellationToken ct = default);
-```
-
----
-
-## Step 7: Bundle models.toml
-
-**Goal:** Include default models configuration with app
-
-**Create:** `apps/desktop/opencode/config/models.toml`
-
-Copy content from `submodules/opencode-egui/config/models.toml`
-
-**Update:** `apps/desktop/opencode/tauri.conf.json`
-```json
-{
-  "bundle": {
-    "resources": ["config/models.toml"]
-  }
-}
-```
-
----
-
-## Success Criteria for Session 9
-
-- [ ] `cargo build -p client-core` succeeds with config module
-- [ ] `cargo test -p client-core` passes config unit tests
-- [ ] App startup logs show config loaded
-- [ ] `config.json` created in app data directory if missing
-- [ ] Config persists across app restarts
-- [ ] `models.toml` loads from bundle
-- [ ] Blazor can fetch config via IPC (add test button if needed)
+- [ ] `dotnet build` succeeds
+- [ ] Settings button (gear icon) visible in top-right header
+- [ ] Clicking settings opens modal dialog
+- [ ] Server section displays:
+  - [ ] Status with icon (green check = connected, gray X = not connected)
+  - [ ] URL, PID, Owned (when connected)
+- [ ] "Refresh" button discovers server and updates display
+- [ ] "Start Server" button spawns server (disabled when already connected)
+- [ ] "Stop Server" button stops server (disabled if not owned or not connected)
+- [ ] Loading indicator shown during async operations
+- [ ] Errors displayed in alert box
+- [ ] ESC key closes modal
+- [ ] X button closes modal
 
 ---
 
 ## Key Files to Reference
 
-**Existing (Read these first):**
-- `submodules/opencode-egui/src/config/mod.rs` - AppConfig patterns
-- `submodules/opencode-egui/src/config/models.rs` - ModelsConfig patterns
-- `submodules/opencode-egui/config/models.toml` - Default models
-- `docs/EGUI_ARCHITECTURE.md` - Config file locations and structure
-- `Session_9_Plan.md` - Full session plan with edge cases
+**Existing patterns:**
+- `frontend/desktop/opencode/Pages/Home.razor` - Async patterns, error handling, Radzen components
+- `frontend/desktop/opencode/Services/IpcClient.cs` - SendRequestAsync pattern
+- `proto/ipc.proto` - Message definitions
 
-**To Create/Modify:**
-- `backend/client-core/src/config/mod.rs` - New
-- `backend/client-core/src/config/models.rs` - New
-- `backend/client-core/src/config/error.rs` - New
-- `apps/desktop/opencode/src/main.rs` - Add config loading
-- `apps/desktop/opencode/config/models.toml` - New (copy from egui)
-- `proto/ipc.proto` - Add config messages
-- `frontend/desktop/opencode/Services/` - Add config service
+**Full implementation details:**
+- `Session_10_Plan.md` - Complete code for all components
 
 ---
 
 ## Important Reminders
 
-1. **Per ADR-0002**: Config logic lives in client-core, not Tauri
-2. **Use naming conventions**: `opencode_url` not `base_url`
-3. **Never crash on config errors**: Fall back to defaults with warning
-4. **Use `#[serde(default)]`**: For forward compatibility
-5. **Production-grade**: No unwraps, comprehensive error handling
+1. **Follow Home.razor patterns** for error handling and loading states
+2. **Use Radzen components** (RadzenDialog, RadzenButton, RadzenAlert, etc.)
+3. **Handle all exceptions** - wrap async calls in try/catch
+4. **Test incrementally** - build after each step
+5. **Proto field names** - C# uses PascalCase (e.g., `DiscoverServerResponse`, `BaseUrl`)
 
 ---
 
-## Dependencies to Add
-
-**client-core Cargo.toml:**
-```toml
-toml = "0.8"
-```
-
-(serde and serde_json already present)
-
----
-
-**Start with:** "Read Session_9_Plan.md and the egui config files, then create the config module structure in client-core"
+**Start with:** Step 1 - Add interface methods to `IIpcClient.cs`
