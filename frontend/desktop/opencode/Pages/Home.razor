@@ -1,10 +1,332 @@
 ﻿@page "/"
+@inject IIpcClient IpcClient
+@inject ILogger<Home> Logger
+@using OpenCode.Services.Exceptions
+@using Opencode.Session
+@implements IDisposable
 
-<PageTitle>OpenCode - Home</PageTitle>
+<PageTitle>OpenCode - Sessions</PageTitle>
 
-<RadzenCard>
-    <RadzenStack Gap="1rem">
-        <RadzenText TextStyle="TextStyle.H3">OpenCode</RadzenText>
-        <RadzenText>IPC client will be implemented in Session 8B</RadzenText>
-    </RadzenStack>
-</RadzenCard>
+<RadzenStack Gap="1rem">
+    <RadzenRow AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween">
+        <RadzenColumn Size="8">
+            <RadzenText TextStyle="TextStyle.H3">
+                Sessions 
+                @if (_sessions.Count > 0)
+                {
+                    <RadzenBadge BadgeStyle="BadgeStyle.Secondary" Text="@_sessions.Count.ToString()" />
+                }
+            </RadzenText>
+        </RadzenColumn>
+        <RadzenColumn Size="4" Style="text-align: right;">
+            <RadzenButton 
+                Icon="refresh" 
+                Text="Refresh" 
+                Click="LoadSessionsAsync" 
+                Disabled="_loading"
+                ButtonStyle="ButtonStyle.Light" />
+        </RadzenColumn>
+    </RadzenRow>
+
+    @* Error display with retry button *@
+    @if (_error != null)
+    {
+        <RadzenAlert 
+            AlertStyle="@GetAlertStyle(_errorType)" 
+            Variant="Variant.Flat" 
+            Shade="Shade.Lighter"
+            AllowClose="true"
+            Close="@(() => _error = null)">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+                <RadzenIcon Icon="@GetErrorIcon(_errorType)" />
+                <RadzenStack Gap="0.5rem" Style="flex: 1">
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-weight: 600">
+                        @GetErrorTitle(_errorType)
+                    </RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body2">@_error</RadzenText>
+                </RadzenStack>
+                @if (_errorType == ErrorType.Connection || _errorType == ErrorType.Timeout)
+                {
+                    <RadzenButton 
+                        Text="Retry" 
+                        Click="LoadSessionsAsync" 
+                        ButtonStyle="ButtonStyle.Danger"
+                        Size="ButtonSize.Small" />
+                }
+            </RadzenStack>
+        </RadzenAlert>
+    }
+
+    @* Loading state *@
+    @if (_loading && _sessions.Count == 0)
+    {
+        <RadzenCard>
+            <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" Style="padding: 2rem;">
+                <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Large" />
+                <RadzenText TextStyle="TextStyle.Body1">Loading sessions...</RadzenText>
+            </RadzenStack>
+        </RadzenCard>
+    }
+    @* Empty state *@
+    else if (_sessions.Count == 0)
+    {
+        <RadzenCard>
+            <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" Style="padding: 2rem;">
+                <RadzenIcon Icon="inbox" Style="font-size: 3rem; color: var(--rz-text-disabled-color);" />
+                <RadzenText TextStyle="TextStyle.H6">No Sessions</RadzenText>
+                <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-text-secondary-color);">
+                    Create a new session to get started
+                </RadzenText>
+                <RadzenButton Text="Create Session" Icon="add" ButtonStyle="ButtonStyle.Primary" Click="CreateNewSessionAsync" />
+            </RadzenStack>
+        </RadzenCard>
+    }
+    @* Session list *@
+    else
+    {
+        <RadzenDataList 
+            Data="@_sessions" 
+            TItem="OcSessionInfo" 
+            WrapItems="true"
+            AllowPaging="true"
+            PageSize="10">
+            <Template Context="session">
+                <RadzenCard Style="width: 100%; margin-bottom: 0.5rem;">
+                    <RadzenStack Gap="0.5rem">
+                        <RadzenRow AlignItems="AlignItems.Center">
+                            <RadzenColumn Size="10">
+                                <RadzenText TextStyle="TextStyle.H6">@session.Title</RadzenText>
+                            </RadzenColumn>
+                            <RadzenColumn Size="2" Style="text-align: right;">
+                                <RadzenButton 
+                                    Icon="delete" 
+                                    ButtonStyle="ButtonStyle.Danger" 
+                                    Variant="Variant.Text"
+                                    Size="ButtonSize.Small"
+                                    Click="@(() => DeleteSessionAsync(session.Id))" />
+                            </RadzenColumn>
+                        </RadzenRow>
+                        <RadzenText TextStyle="TextStyle.Caption" Style="color: var(--rz-text-secondary-color);">
+                            <RadzenIcon Icon="tag" Style="font-size: 0.875rem;" /> @session.Id
+                        </RadzenText>
+                        <RadzenRow>
+                            <RadzenColumn Size="6">
+                                <RadzenText TextStyle="TextStyle.Caption" Style="color: var(--rz-text-secondary-color);">
+                                    <RadzenIcon Icon="schedule" Style="font-size: 0.875rem;" /> Created: @FormatTimestamp(session.Time.Created)
+                                </RadzenText>
+                            </RadzenColumn>
+                            <RadzenColumn Size="6">
+                                <RadzenText TextStyle="TextStyle.Caption" Style="color: var(--rz-text-secondary-color);">
+                                    <RadzenIcon Icon="update" Style="font-size: 0.875rem;" /> Updated: @FormatTimestamp(session.Time.Updated)
+                                </RadzenText>
+                            </RadzenColumn>
+                        </RadzenRow>
+                        @if (session.Summary != null)
+                        {
+                            <RadzenRow>
+                                <RadzenColumn>
+                                    <RadzenBadge BadgeStyle="BadgeStyle.Success" Text="@($"+{session.Summary.Additions}")" Style="margin-right: 0.5rem;" />
+                                    <RadzenBadge BadgeStyle="BadgeStyle.Danger" Text="@($"-{session.Summary.Deletions}")" Style="margin-right: 0.5rem;" />
+                                    <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@($"{session.Summary.Files} files")" />
+                                </RadzenColumn>
+                            </RadzenRow>
+                        }
+                    </RadzenStack>
+                </RadzenCard>
+            </Template>
+        </RadzenDataList>
+        
+        @if (_loading)
+        {
+            <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" Style="margin-top: 1rem;" />
+        }
+    }
+</RadzenStack>
+
+@code {
+    private List<OcSessionInfo> _sessions = new();
+    private bool _loading = true;
+    private string? _error;
+    private ErrorType _errorType = ErrorType.Unknown;
+    private CancellationTokenSource? _loadCts;
+
+    private enum ErrorType
+    {
+        Unknown,
+        Connection,
+        Authentication,
+        Timeout,
+        Server
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        IpcClient.ConnectionStateChanged += OnConnectionStateChanged;
+        await LoadSessionsAsync();
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            // Connect if needed (lazy connection)
+            if (!IpcClient.IsConnected)
+            {
+                await IpcClient.ConnectAsync();
+            }
+
+            var result = await IpcClient.ListSessionsAsync(_loadCts.Token);
+            _sessions = result.Sessions.ToList();
+            Logger.LogInformation("Loaded {Count} sessions", _sessions.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancelled, ignore
+        }
+        catch (IpcConnectionException ex)
+        {
+            _errorType = ErrorType.Connection;
+            _error = ex.Message;
+            Logger.LogError(ex, "Connection error loading sessions");
+        }
+        catch (IpcAuthenticationException ex)
+        {
+            _errorType = ErrorType.Authentication;
+            _error = ex.Message;
+            Logger.LogError(ex, "Authentication error loading sessions");
+        }
+        catch (IpcTimeoutException ex)
+        {
+            _errorType = ErrorType.Timeout;
+            _error = "The request took too long. Please try again.";
+            Logger.LogError(ex, "Timeout loading sessions");
+        }
+        catch (IpcServerException ex)
+        {
+            _errorType = ErrorType.Server;
+            _error = ex.Message;
+            Logger.LogError(ex, "Server error loading sessions: {ErrorCode}", ex.ErrorCode);
+        }
+        catch (Exception ex)
+        {
+            _errorType = ErrorType.Unknown;
+            _error = "An unexpected error occurred. Please try again.";
+            Logger.LogError(ex, "Unexpected error loading sessions");
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateNewSessionAsync()
+    {
+        try
+        {
+            var session = await IpcClient.CreateSessionAsync("New Session");
+            _sessions.Insert(0, session);
+            StateHasChanged();
+            Logger.LogInformation("Created session {SessionId}", session.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to create session: {ex.Message}";
+            Logger.LogError(ex, "Failed to create session");
+        }
+    }
+
+    private async Task DeleteSessionAsync(string sessionId)
+    {
+        try
+        {
+            var success = await IpcClient.DeleteSessionAsync(sessionId);
+            if (success)
+            {
+                _sessions.RemoveAll(s => s.Id == sessionId);
+                StateHasChanged();
+                Logger.LogInformation("Deleted session {SessionId}", sessionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to delete session: {ex.Message}";
+            Logger.LogError(ex, "Failed to delete session {SessionId}", sessionId);
+        }
+    }
+
+    private void OnConnectionStateChanged(object? sender, ConnectionStateChangedEventArgs e)
+    {
+        InvokeAsync(() =>
+        {
+            if (e.NewState == ConnectionState.Failed || e.NewState == ConnectionState.Disconnected)
+            {
+                _errorType = ErrorType.Connection;
+                _error = "Connection to backend lost";
+                StateHasChanged();
+            }
+        });
+    }
+
+    private string FormatTimestamp(long unixMilliseconds)
+    {
+        var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds);
+        var localTime = dateTime.LocalDateTime;
+
+        // Show relative time if recent
+        var now = DateTime.Now;
+        var diff = now - localTime;
+
+        if (diff.TotalMinutes < 1)
+            return "Just now";
+        if (diff.TotalHours < 1)
+            return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1)
+            return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7)
+            return $"{(int)diff.TotalDays}d ago";
+
+        return localTime.ToString("MMM dd, yyyy");
+    }
+
+    private AlertStyle GetAlertStyle(ErrorType errorType) => errorType switch
+    {
+        ErrorType.Authentication => AlertStyle.Warning,
+        ErrorType.Connection => AlertStyle.Danger,
+        ErrorType.Timeout => AlertStyle.Warning,
+        ErrorType.Server => AlertStyle.Danger,
+        _ => AlertStyle.Info
+    };
+
+    private string GetErrorIcon(ErrorType errorType) => errorType switch
+    {
+        ErrorType.Authentication => "lock",
+        ErrorType.Connection => "signal_wifi_off",
+        ErrorType.Timeout => "schedule",
+        ErrorType.Server => "error",
+        _ => "info"
+    };
+
+    private string GetErrorTitle(ErrorType errorType) => errorType switch
+    {
+        ErrorType.Authentication => "Authentication Failed",
+        ErrorType.Connection => "Connection Error",
+        ErrorType.Timeout => "Request Timeout",
+        ErrorType.Server => "Server Error",
+        _ => "Error"
+    };
+
+    public void Dispose()
+    {
+        IpcClient.ConnectionStateChanged -= OnConnectionStateChanged;
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+    }
+
+}
