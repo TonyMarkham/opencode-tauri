@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use opencode::tauri_commands;
 use opencode::error::OpencodeError;
 use opencode::ipc_config::IpcConfig;
 use opencode::logger::initialize as LoggerInitialize;
@@ -19,6 +20,9 @@ use uuid::Uuid;
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            tauri_commands::ipc_config_response::get_ipc_config,
+        ])
         .setup(|app| {
             // Get app data directory for logs
             let log_dir = app
