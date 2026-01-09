@@ -1,0 +1,367 @@
+@namespace OpenCode.Components
+@inject IIpcClient IpcClient
+@inject ILogger<ServerSection> Logger
+@using OpenCode.Services
+@using OpenCode.Services.Exceptions
+@using Opencode
+@implements IDisposable
+
+<RadzenFieldset Text="Server" Style="margin-bottom: 1rem;" aria-label="OpenCode Server Management">
+    <RadzenStack Gap="1rem">
+        
+        @* Status Row *@
+        <RadzenRow AlignItems="AlignItems.Center">
+            <RadzenColumn Size="3">
+                <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-text-secondary-color);">
+                    Status
+                </RadzenText>
+            </RadzenColumn>
+            <RadzenColumn Size="9">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenIcon Icon="@GetStatusIcon()" Style="@GetStatusColor()" aria-hidden="true" />
+                    <RadzenText TextStyle="TextStyle.Body1" role="status" aria-live="polite">
+                        @GetStatusText()
+                    </RadzenText>
+                </RadzenStack>
+            </RadzenColumn>
+        </RadzenRow>
+        
+        @if (_serverInfo != null)
+        {
+            @* URL Row *@
+            <RadzenRow AlignItems="AlignItems.Center">
+                <RadzenColumn Size="3">
+                    <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-text-secondary-color);">
+                        URL
+                    </RadzenText>
+                </RadzenColumn>
+                <RadzenColumn Size="9">
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-family: monospace;">
+                        @_serverInfo.BaseUrl
+                    </RadzenText>
+                </RadzenColumn>
+            </RadzenRow>
+            
+            @* PID Row *@
+            <RadzenRow AlignItems="AlignItems.Center">
+                <RadzenColumn Size="3">
+                    <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-text-secondary-color);">
+                        PID
+                    </RadzenText>
+                </RadzenColumn>
+                <RadzenColumn Size="9">
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-family: monospace;">
+                        @_serverInfo.Pid
+                    </RadzenText>
+                </RadzenColumn>
+            </RadzenRow>
+            
+            @* Owned Row *@
+            <RadzenRow AlignItems="AlignItems.Center">
+                <RadzenColumn Size="3">
+                    <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-text-secondary-color);">
+                        Owned
+                    </RadzenText>
+                </RadzenColumn>
+                <RadzenColumn Size="9">
+                    <RadzenText TextStyle="TextStyle.Body1">
+                        @(_serverInfo.Owned ? "Yes (managed by this app)" : "No (external process)")
+                    </RadzenText>
+                </RadzenColumn>
+            </RadzenRow>
+        }
+        
+        @* Error display *@
+        @if (_error != null)
+        {
+            <RadzenAlert 
+                AlertStyle="AlertStyle.Danger" 
+                Variant="Variant.Flat" 
+                Shade="Shade.Lighter" 
+                AllowClose="true" 
+                Close="@DismissError"
+                role="alert"
+                aria-live="assertive">
+                @_error
+            </RadzenAlert>
+        }
+        
+        @* Action Buttons *@
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Style="margin-top: 0.5rem;" role="group" aria-label="Server actions">
+            <RadzenButton 
+                Text="Refresh" 
+                Icon="refresh" 
+                ButtonStyle="ButtonStyle.Light"
+                Click="RefreshAsync"
+                Disabled="_loading"
+                aria-label="Refresh server status"
+                title="Refresh server status" />
+            
+            <RadzenButton 
+                Text="Start Server" 
+                Icon="play_arrow" 
+                ButtonStyle="ButtonStyle.Success"
+                Click="StartServerAsync"
+                Disabled="@(_loading || _serverInfo != null)"
+                aria-label="Start OpenCode server"
+                title="@(_serverInfo != null ? "Server already running" : "Start a new OpenCode server")" />
+            
+            <RadzenButton 
+                Text="Stop Server" 
+                Icon="stop" 
+                ButtonStyle="ButtonStyle.Danger"
+                Click="StopServerAsync"
+                Disabled="@(_loading || _serverInfo == null || !_serverInfo.Owned)"
+                aria-label="Stop OpenCode server"
+                title="@GetStopButtonTitle()" />
+        </RadzenStack>
+        
+        @if (_loading)
+        {
+            <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" aria-label="Loading..." />
+        }
+        
+    </RadzenStack>
+</RadzenFieldset>
+
+@code {
+    private IpcServerInfo? _serverInfo;
+    private bool _loading;
+    private string? _error;
+    private bool _healthy;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+        await RefreshAsync();
+    }
+    
+    private async Task RefreshAsync()
+    {
+        // Cancel any in-flight operation
+        await CancelCurrentOperationAsync();
+        
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+        
+        try
+        {
+            // Ensure IPC connected
+            if (!IpcClient.IsConnected)
+            {
+                Logger.LogDebug("IPC not connected, connecting...");
+                await IpcClient.ConnectAsync();
+            }
+            
+            // Discover server
+            _serverInfo = await IpcClient.DiscoverServerAsync(_cts.Token);
+            
+            // Check health if server found
+            if (_serverInfo != null)
+            {
+                try
+                {
+                    _healthy = await IpcClient.CheckServerHealthAsync(_cts.Token);
+                }
+                catch (ServerHealthCheckException ex)
+                {
+                    // Health check failure is not fatal - mark as unhealthy
+                    _healthy = false;
+                    Logger.LogWarning(ex, "Health check failed for server {BaseUrl}", _serverInfo.BaseUrl);
+                }
+            }
+            else
+            {
+                _healthy = false;
+            }
+            
+            Logger.LogDebug("Server status refreshed successfully");
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancelled - not an error
+            Logger.LogDebug("Refresh operation cancelled");
+        }
+        catch (IpcConnectionException ex)
+        {
+            _error = ServerErrorMessages.IpcDisconnected;
+            Logger.LogError(ex, "IPC connection error during refresh");
+        }
+        catch (IpcTimeoutException ex)
+        {
+            _error = ServerErrorMessages.DiscoveryTimeout;
+            Logger.LogError(ex, "Timeout during server discovery");
+        }
+        catch (ServerDiscoveryException ex)
+        {
+            _error = ServerErrorMessages.DiscoveryFailed;
+            Logger.LogError(ex, "Server discovery failed");
+        }
+        catch (Exception ex)
+        {
+            _error = ServerErrorMessages.UnexpectedError;
+            Logger.LogError(ex, "Unexpected error during refresh");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private async Task StartServerAsync()
+    {
+        await CancelCurrentOperationAsync();
+        
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+        
+        try
+        {
+            if (!IpcClient.IsConnected)
+            {
+                await IpcClient.ConnectAsync();
+            }
+            
+            _serverInfo = await IpcClient.SpawnServerAsync(cancellationToken: _cts.Token);
+            _healthy = true; // Newly spawned server is healthy
+            
+            Logger.LogInformation("Server started successfully: PID={Pid}, URL={Url}", 
+                _serverInfo.Pid, _serverInfo.BaseUrl);
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogDebug("Server start cancelled");
+        }
+        catch (IpcConnectionException ex)
+        {
+            _error = ServerErrorMessages.IpcDisconnected;
+            Logger.LogError(ex, "IPC connection error during server start");
+        }
+        catch (IpcTimeoutException ex)
+        {
+            _error = ServerErrorMessages.SpawnTimeout;
+            Logger.LogError(ex, "Timeout during server spawn");
+        }
+        catch (ServerSpawnException ex)
+        {
+            _error = ServerErrorMessages.SpawnFailed;
+            Logger.LogError(ex, "Server spawn failed");
+        }
+        catch (Exception ex)
+        {
+            _error = ServerErrorMessages.UnexpectedError;
+            Logger.LogError(ex, "Unexpected error starting server");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private async Task StopServerAsync()
+    {
+        await CancelCurrentOperationAsync();
+        
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+        
+        try
+        {
+            if (!IpcClient.IsConnected)
+            {
+                await IpcClient.ConnectAsync();
+            }
+            
+            var success = await IpcClient.StopServerAsync(_cts.Token);
+            
+            if (success)
+            {
+                _serverInfo = null;
+                _healthy = false;
+                Logger.LogInformation("Server stopped successfully");
+            }
+            else
+            {
+                _error = ServerErrorMessages.StopNotOwned;
+                Logger.LogWarning("Failed to stop server - not owned by this client");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogDebug("Server stop cancelled");
+        }
+        catch (IpcConnectionException ex)
+        {
+            _error = ServerErrorMessages.IpcDisconnected;
+            Logger.LogError(ex, "IPC connection error during server stop");
+        }
+        catch (IpcTimeoutException ex)
+        {
+            _error = ServerErrorMessages.StopTimeout;
+            Logger.LogError(ex, "Timeout during server stop");
+        }
+        catch (ServerStopException ex)
+        {
+            _error = ServerErrorMessages.StopFailed;
+            Logger.LogError(ex, "Server stop failed");
+        }
+        catch (Exception ex)
+        {
+            _error = ServerErrorMessages.UnexpectedError;
+            Logger.LogError(ex, "Unexpected error stopping server");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private async Task CancelCurrentOperationAsync()
+    {
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+            _cts = null;
+            
+            // Give cancellation a moment to complete
+            await Task.Delay(50);
+        }
+    }
+    
+    private void DismissError()
+    {
+        _error = null;
+    }
+    
+    private string GetStatusIcon() => _serverInfo != null 
+        ? (_healthy ? "check_circle" : "warning") 
+        : "cancel";
+    
+    private string GetStatusColor() => _serverInfo != null 
+        ? (_healthy ? "color: var(--rz-success);" : "color: var(--rz-warning);") 
+        : "color: var(--rz-text-disabled-color);";
+    
+    private string GetStatusText() => _serverInfo != null 
+        ? (_healthy ? "Connected" : "Unhealthy") 
+        : "Not Connected";
+    
+    private string GetStopButtonTitle()
+    {
+        if (_serverInfo == null)
+            return "No server to stop";
+        if (!_serverInfo.Owned)
+            return "Cannot stop external server";
+        return "Stop the OpenCode server";
+    }
+    
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

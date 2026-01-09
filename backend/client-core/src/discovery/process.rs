@@ -104,7 +104,9 @@ fn discover_by_process_scan() -> Result<Option<IpcServerInfo>, DiscoveryError> {
 
         let is_candidate =
             (name.contains("bun") || name.contains("node") || name.contains("opencode"))
-                && (command.contains("opencode") || name.contains("opencode"));
+                && command.contains("opencode")
+                && command.contains("serve")
+                && pid.as_u32() != std::process::id();
 
         if !is_candidate {
             continue;
@@ -124,7 +126,7 @@ fn discover_by_process_scan() -> Result<Option<IpcServerInfo>, DiscoveryError> {
                 base_url,
                 name: OPENCODE_BINARY.to_string(),
                 command: format!("{OPENCODE_BINARY} {command}"),
-                owned: true,
+                owned: false,
             };
 
             return Ok(Some(server_info));

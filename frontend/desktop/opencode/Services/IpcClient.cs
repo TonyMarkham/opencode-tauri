@@ -534,4 +534,198 @@ public class IpcClient : IIpcClient, IDisposable
         SetConnectionState(ConnectionState.Disconnected);
         _logger.LogInformation("IPC client disposed");
     }
+
+    // ========== Server Management Operations ==========
+
+    public async Task<IpcServerInfo?> DiscoverServerAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        _logger.LogDebug("Discovering OpenCode servers...");
+
+        try
+        {
+            var request = new IpcClientMessage
+            {
+                DiscoverServer = new IpcDiscoverServerRequest()
+            };
+
+            var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+
+            // Null-safe: DiscoverServerResponse might be null
+            if (response.DiscoverServerResponse == null)
+            {
+                _logger.LogError("DiscoverServerResponse is null in response payload");
+                throw new ServerDiscoveryException("Invalid response from server: DiscoverServerResponse is null");
+            }
+
+            var server = response.DiscoverServerResponse.Server;
+
+            if (server != null)
+            {
+                _logger.LogInformation(
+                    "Discovered OpenCode server: {BaseUrl}, PID={Pid}, Owned={Owned}",
+                    server.BaseUrl, server.Pid, server.Owned);
+            }
+            else
+            {
+                _logger.LogInformation("No OpenCode server found");
+            }
+
+            return server;
+        }
+        catch (IpcException)
+        {
+            // Re-throw IPC exceptions as-is
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to discover server");
+            throw new ServerDiscoveryException("Server discovery failed unexpectedly", ex);
+        }
+    }
+
+    public async Task<IpcServerInfo> SpawnServerAsync(uint? port = null, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        var effectivePort = port ?? 0;
+        _logger.LogInformation("Spawning OpenCode server on port {Port}...",
+            effectivePort == 0 ? "auto" : effectivePort.ToString());
+
+        try
+        {
+            var request = new IpcClientMessage
+            {
+                SpawnServer = new IpcSpawnServerRequest { Port = effectivePort }
+            };
+
+            var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+
+            // Validate response
+            if (response.SpawnServerResponse == null)
+            {
+                _logger.LogError("SpawnServerResponse is null in response payload");
+                throw new ServerSpawnException("Invalid response from server: SpawnServerResponse is null");
+            }
+
+            if (response.SpawnServerResponse.Server == null)
+            {
+                _logger.LogError("SpawnServerResponse.Server is null");
+                throw new ServerSpawnException("Server spawn succeeded but returned null server info");
+            }
+
+            var server = response.SpawnServerResponse.Server;
+
+            _logger.LogInformation(
+                "OpenCode server spawned successfully: {BaseUrl}, PID={Pid}",
+                server.BaseUrl, server.Pid);
+
+            return server;
+        }
+        catch (IpcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to spawn server");
+            throw new ServerSpawnException("Server spawn failed unexpectedly", ex);
+        }
+    }
+
+    public async Task<bool> StopServerAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        _logger.LogInformation("Stopping OpenCode server...");
+
+        try
+        {
+            var request = new IpcClientMessage
+            {
+                StopServer = new IpcStopServerRequest()
+            };
+
+            var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+
+            // Validate response
+            if (response.StopServerResponse == null)
+            {
+                _logger.LogError("StopServerResponse is null in response payload");
+                throw new ServerStopException("Invalid response from server: StopServerResponse is null");
+            }
+
+            var success = response.StopServerResponse.Success;
+
+            if (success)
+            {
+                _logger.LogInformation("OpenCode server stopped successfully");
+            }
+            else
+            {
+                _logger.LogWarning("Failed to stop server (may not be owned by this client)");
+            }
+
+            return success;
+        }
+        catch (IpcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to stop server");
+            throw new ServerStopException("Server stop operation failed unexpectedly", ex);
+        }
+    }
+
+    public async Task<bool> CheckServerHealthAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        _logger.LogDebug("Checking OpenCode server health...");
+
+        try
+        {
+            var request = new IpcClientMessage
+            {
+                CheckHealth = new IpcCheckHealthRequest()
+            };
+
+            var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+
+            // Validate response
+            if (response.CheckHealthResponse == null)
+            {
+                _logger.LogError("CheckHealthResponse is null in response payload");
+                throw new ServerHealthCheckException("Invalid response from server: CheckHealthResponse is null");
+            }
+
+            var healthy = response.CheckHealthResponse.Healthy;
+
+            _logger.LogDebug("OpenCode server health check: {Status}", healthy ? "healthy" : "unhealthy");
+
+            return healthy;
+        }
+        catch (IpcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Health check failed");
+            throw new ServerHealthCheckException("Server health check failed unexpectedly", ex);
+        }
+    }
+
+    // Helper method
+    private void ThrowIfDisposed()
+    {
+        if (_disposed == 1)
+        {
+            throw new ObjectDisposedException(nameof(IpcClient));
+        }
+    }
 }

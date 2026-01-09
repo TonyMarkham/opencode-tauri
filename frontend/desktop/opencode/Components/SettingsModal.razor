@@ -1,0 +1,47 @@
+@namespace OpenCode.Components
+@using OpenCode.Services
+
+@if (_visible)
+{
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;" @onclick="@(() => {})">
+        <div style="width: 600px; max-width: 90vw; background: var(--rz-base-background-color, white); border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); max-height: 90vh; overflow: auto;" @onclick:stopPropagation="true" role="dialog" aria-labelledby="settings-title">
+            <RadzenStack Gap="1.5rem" Style="padding: 1.5rem;">
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center">
+                    <RadzenText id="settings-title" TextStyle="TextStyle.H5" Style="margin: 0;">Settings</RadzenText>
+                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@Hide" aria-label="Close settings" />
+                </RadzenStack>
+                
+                <ServerSection />
+                
+                @* Future sections: Models, Audio, UI Preferences *@
+            </RadzenStack>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _visible;
+    
+    /// <summary>
+    /// Shows the settings modal.
+    /// </summary>
+    public void Show() 
+    {
+        _visible = true;
+        StateHasChanged();
+    }
+    
+    /// <summary>
+    /// Hides the settings modal.
+    /// </summary>
+    public void Hide()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+    
+    /// <summary>
+    /// Gets whether the modal is currently visible.
+    /// </summary>
+    public bool IsVisible => _visible;
+}

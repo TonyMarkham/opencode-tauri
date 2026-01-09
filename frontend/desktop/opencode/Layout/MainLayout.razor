@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -6,7 +7,15 @@
 
     <main>
         <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <RadzenButton 
+                Icon="settings" 
+                ButtonStyle="ButtonStyle.Base"
+                Variant="Variant.Text"
+                Size="ButtonSize.Medium"
+                Click="@ShowSettings"
+                Style="color: #666;"
+                aria-label="Open settings"
+                title="Settings" />
         </div>
 
         <article class="content px-4">
@@ -14,3 +23,14 @@
         </article>
     </main>
 </div>
+
+<SettingsModal @ref="_settingsModal" />
+
+@code {
+    private SettingsModal? _settingsModal;
+    
+    private void ShowSettings()
+    {
+        _settingsModal?.Show();
+    }
+}
