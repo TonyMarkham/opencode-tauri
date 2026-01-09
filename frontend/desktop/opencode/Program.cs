@@ -28,4 +28,18 @@ builder.Services.AddSingleton<IIpcConfigService, TauriIpcConfigService>();
 builder.Services.AddSingleton<IIpcClientMetrics, IpcClientMetrics>();
 builder.Services.AddSingleton<IIpcClient, IpcClient>();
 
+// Configure retry policy
+builder.Services.Configure<RetryPolicyOptions>(options =>
+{
+    options.MaxRetries = 3;
+    options.InitialDelay = TimeSpan.FromMilliseconds(100);
+    options.MaxDelay = TimeSpan.FromSeconds(2);
+    options.BackoffMultiplier = 2.0;
+    options.AddJitter = true;
+});
+
+// Register config services
+builder.Services.AddSingleton<IRetryPolicy, RetryPolicy>();
+builder.Services.AddSingleton<IConfigService, ConfigService>();
+
 await builder.Build().RunAsync();

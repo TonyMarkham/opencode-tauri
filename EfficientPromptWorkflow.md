@@ -59,7 +59,7 @@ Can you please serialize that to `session_11_prod_plan.md`?
 
 ### Implement
 ```txt
-I'd like you to read `CRITICAL_OPERATING_CONSTRAINTS.md`  And using those guidelines help me implement `session_10_prod_plan.md`
+I'd like you to read `CRITICAL_OPERATING_CONSTRAINTS.md`  And using those guidelines help me implement `session_11_prod_plan.md`
 
  You won't be writing or editing any code. You'll be presenting code snippets to me, for me to implement, so that I understand what's going on incrementally.
 

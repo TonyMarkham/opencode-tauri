@@ -7,8 +7,8 @@
 
     <main>
         <div class="top-row px-4">
-            <RadzenButton 
-                Icon="settings" 
+            <RadzenButton
+                Icon="settings"
                 ButtonStyle="ButtonStyle.Base"
                 Variant="Variant.Text"
                 Size="ButtonSize.Medium"
@@ -21,6 +21,10 @@
         <article class="content px-4">
             @Body
         </article>
+
+        <footer class="footer px-4">
+            <ModelSelector @ref="_modelSelector" OnModelSelected="@OnModelSelected" />
+        </footer>
     </main>
 </div>
 
@@ -28,9 +32,17 @@
 
 @code {
     private SettingsModal? _settingsModal;
-    
+    private ModelSelector? _modelSelector;
+
     private void ShowSettings()
     {
         _settingsModal?.Show();
+    }
+
+    private async Task OnModelSelected(string modelId)
+    {
+        // TODO: Store selected model (Session 12+)
+        // For now, just log it
+        Console.WriteLine($"Model selected: {modelId}");
     }
 }

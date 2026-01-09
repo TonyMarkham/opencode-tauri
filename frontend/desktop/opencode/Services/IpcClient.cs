@@ -8,6 +8,7 @@ using OpenCode.Services.Exceptions;
 using Google.Protobuf;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Net.WebSockets;
 
 /// <summary>
@@ -36,6 +37,12 @@ public class IpcClient : IIpcClient, IDisposable
 
     // Disposal
     private int _disposed = 0;
+    
+    // Shared JSON options for config deserialization (thread-safe, reusable)
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public event EventHandler<ConnectionStateChangedEventArgs>? ConnectionStateChanged;
 
@@ -720,6 +727,59 @@ public class IpcClient : IIpcClient, IDisposable
         }
     }
 
+    // ========== Config Operations ==========
+
+    public async Task<(AppConfig App, ModelsConfig Models)> GetConfigAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        _logger.LogDebug("Getting config...");
+
+        try
+        {
+            var request = new IpcClientMessage
+            {
+                GetConfig = new IpcGetConfigRequest()
+            };
+
+            var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+
+            // Validate response
+            if (response.GetConfigResponse == null)
+            {
+                _logger.LogError("GetConfigResponse is null in response payload");
+                throw new IpcProtocolException("Invalid response from server: GetConfigResponse is null");
+            }
+
+            // Deserialize JSON strings to typed objects
+            var appConfig = JsonSerializer.Deserialize<AppConfig>(
+                                response.GetConfigResponse.AppConfigJson,
+                                s_jsonOptions)
+                            ?? throw new IpcProtocolException("Failed to deserialize AppConfig");
+
+            var modelsConfig = JsonSerializer.Deserialize<ModelsConfig>(
+                                   response.GetConfigResponse.ModelsConfigJson,
+                                   s_jsonOptions)
+                               ?? throw new IpcProtocolException("Failed to deserialize ModelsConfig");
+
+            _logger.LogInformation(
+                "Config loaded: {ModelCount} curated models, default={DefaultModel}",
+                modelsConfig.Models.Curated.Count,
+                modelsConfig.Models.DefaultModel);
+
+            return (appConfig, modelsConfig);
+        }
+        catch (IpcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get config");
+            throw new IpcProtocolException("Config retrieval failed unexpectedly", ex);
+        }
+    }
+    
     // Helper method
     private void ThrowIfDisposed()
     {

@@ -1,0 +1,157 @@
+  @namespace OpenCode.Components
+  @inject IConfigService ConfigService
+  @inject ILogger<ModelSelector> Logger
+  @using OpenCode.Services
+  @implements IDisposable
+
+  <div class="model-selector" aria-label="Model selection">
+      @if (ConfigService.State == ConfigLoadState.Error)
+      {
+          <div style="display: flex; align-items: center; gap: 8px;">
+              <RadzenIcon Icon="error" Style="color: var(--rz-danger);" />
+              <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-danger);">
+                  Models unavailable
+              </RadzenText>
+              <RadzenButton
+                  Icon="refresh"
+                  ButtonStyle="ButtonStyle.Light"
+                  Size="ButtonSize.ExtraSmall"
+                  Click="@RefreshAsync"
+                  title="Retry loading models"
+                  aria-label="Retry loading models" />
+          </div>
+      }
+      else if (ConfigService.State == ConfigLoadState.Stale)
+      {
+          <div style="display: flex; align-items: center; gap: 8px;">
+              <RadzenDropDown
+                  @bind-Value="_selectedModel"
+                  Data="_models"
+                  TextProperty="Name"
+                  ValueProperty="FullId"
+                  Placeholder="Select model..."
+                  Style="width: 250px;"
+                  Disabled="_loading"
+                      Change="@OnModelChanged"
+                  aria-label="Select model for chat" />
+              <RadzenBadge
+                  BadgeStyle="BadgeStyle.Warning"
+                  Text="!"
+                  title="Using cached data - refresh failed"
+                  style="cursor: help;" />
+          </div>
+      }
+      else
+      {
+          <RadzenDropDown
+              @bind-Value="_selectedModel"
+              Data="_models"
+              TextProperty="Name"
+              ValueProperty="FullId"
+              Placeholder="Select model..."
+              Style="width: 250px;"
+              Disabled="_loading"
+              Change="@OnModelChanged"
+              aria-label="Select model for chat" />
+      }
+
+      @if (_loading)
+      {
+          <RadzenIcon Icon="hourglass_empty" Style="margin-left: 4px; color: var(--rz-text-secondary-color);" />
+      }
+  </div>
+
+  @code {
+      private List<CuratedModel>? _models;
+      private string? _selectedModel;
+      private bool _loading;
+
+      /// <summary>
+      /// Event raised when model selection changes.
+      /// </summary>
+      [Parameter]
+      public EventCallback<string> OnModelSelected { get; set; }
+
+      /// <summary>
+      /// Gets the currently selected model ID.
+      /// </summary>
+      public string? SelectedModel => _selectedModel;
+
+      protected override async Task OnInitializedAsync()
+      {
+          // Subscribe to config changes
+          ConfigService.ConfigChanged += OnConfigChanged;
+
+          // Load initial data
+          await LoadModelsAsync();
+      }
+
+      private async Task LoadModelsAsync()
+      {
+          _loading = true;
+
+          try
+          {
+              var (_, modelsConfig) = await ConfigService.GetConfigAsync();
+
+              if (modelsConfig != null)
+              {
+                  _models = modelsConfig.Models.Curated;
+                  _selectedModel = modelsConfig.Models.DefaultModel;
+
+                  Logger.LogDebug("ModelSelector loaded {Count} models", _models.Count);
+              }
+              else
+              {
+                  _models = new List<CuratedModel>();
+              }
+          }
+          catch (Exception ex)
+          {
+              Logger.LogError(ex, "Failed to load models for selector");
+              _models = new List<CuratedModel>();
+          }
+          finally
+          {
+              _loading = false;
+          }
+      }
+
+      private void OnConfigChanged(object? sender, ConfigChangedEventArgs e)
+      {
+          InvokeAsync(() =>
+          {
+              var modelsConfig = ConfigService.ModelsConfig;
+              if (modelsConfig != null)
+              {
+                  _models = modelsConfig.Models.Curated;
+                  _selectedModel = modelsConfig.Models.DefaultModel;
+              }
+
+              StateHasChanged();
+          });
+      }
+
+      private async Task OnModelChanged()
+      {
+          if (OnModelSelected.HasDelegate && !string.IsNullOrEmpty(_selectedModel))
+          {
+              await OnModelSelected.InvokeAsync(_selectedModel);
+          }
+      }
+
+      /// <summary>
+      /// Refresh models from backend.
+      /// </summary>
+      public async Task RefreshAsync()
+      {
+          await LoadModelsAsync();
+          StateHasChanged();
+      }
+
+      public void Dispose()
+      {
+          ConfigService.ConfigChanged -= OnConfigChanged;
+      }
+
+  }
