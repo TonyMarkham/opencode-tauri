@@ -64,7 +64,7 @@ public class IpcClient : IIpcClient, IDisposable
     /// <summary>
     /// Connects to IPC server with thread-safe state management.
     /// </summary>
-    public async Task ConnectAsync()
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         await _connectionLock.WaitAsync();
         try
@@ -95,8 +95,11 @@ public class IpcClient : IIpcClient, IDisposable
 
                 _ws = new ClientWebSocket();
 
-                using var connectCts = new CancellationTokenSource(_options.ConnectionTimeout);
-                await _ws.ConnectAsync(new Uri(endpoint), connectCts.Token);
+                using var timeoutCts = new CancellationTokenSource(_options.ConnectionTimeout);
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    timeoutCts.Token);
+                await _ws.ConnectAsync(new Uri(endpoint), linkedCts.Token);
 
                 _logger.LogInformation("WebSocket connected");
 
@@ -786,6 +789,54 @@ public class IpcClient : IIpcClient, IDisposable
         if (_disposed == 1)
         {
             throw new ObjectDisposedException(nameof(IpcClient));
+        }
+    }
+    
+    public async Task<IpcAuthSyncResponse> SyncAuthKeysAsync(
+        bool skipOAuthProviders = true,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        _logger.LogDebug("Syncing auth keys (skipOAuth={SkipOAuth})", skipOAuthProviders);
+
+        try
+        {
+            var request = new IpcClientMessage
+            {
+                SyncAuthKeys = new IpcSyncAuthKeysRequest
+                {
+                    SkipOauthProviders = skipOAuthProviders,  // lowercase 'o'
+                    TimeoutSecs = 30
+                }
+            };
+
+            var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
+
+            // Validate response
+            if (response.AuthSyncResponse == null)
+            {
+                _logger.LogError("AuthSyncResponse is null in response payload");
+                throw new IpcProtocolException("Invalid response from server: AuthSyncResponse is null");
+            }
+
+            _logger.LogInformation(
+                "Auth sync completed: {Synced} synced, {Failed} failed, {Skipped} skipped, {Invalid} validation failed",
+                response.AuthSyncResponse.Synced.Count,
+                response.AuthSyncResponse.Failed.Count,
+                response.AuthSyncResponse.Skipped.Count,
+                response.AuthSyncResponse.ValidationFailed.Count);
+
+            return response.AuthSyncResponse;
+        }
+        catch (IpcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync auth keys");
+            throw new IpcProtocolException("Auth sync failed unexpectedly", ex);
         }
     }
 }

@@ -41,4 +41,11 @@ public interface IConfigService
     /// Raised when config changes or state changes.
     /// </summary>
     event EventHandler<ConfigChangedEventArgs>? ConfigChanged;
+    
+    /// <summary>
+    /// Gets display name for a provider ID.
+    /// </summary>
+    /// <param name="providerId">Provider ID (e.g., "openai").</param>
+    /// <returns>Display name (e.g., "OpenAI") or provider ID if not found.</returns>
+    string GetProviderDisplayName(string providerId);
 }

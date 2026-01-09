@@ -1,0 +1,251 @@
+  @namespace OpenCode.Components
+  @inject IAuthSyncService AuthSyncService
+  @inject IConfigService ConfigService
+  @inject ILogger<AuthSection> Logger
+  @using OpenCode.Extensions
+  @using OpenCode.Services
+  @implements IDisposable
+
+  <RadzenFieldset Text="API Keys" Style="margin-bottom: 1rem;" aria-label="API Key Synchronization">
+      <RadzenStack Gap="1rem">
+
+          @* Status Row *@
+          <RadzenRow AlignItems="AlignItems.Center">
+              <RadzenColumn Size="3">
+                  <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-text-secondary-color);">
+                      Status
+                  </RadzenText>
+              </RadzenColumn>
+              <RadzenColumn Size="9">
+                  <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                      <RadzenIcon Icon="@GetStatusIcon()" Style="@GetStatusColor()" aria-hidden="true" />
+                      <RadzenText TextStyle="TextStyle.Body1" role="status" aria-live="polite">
+                          @GetStatusText()
+                      </RadzenText>
+                  </RadzenStack>
+              </RadzenColumn>
+          </RadzenRow>
+
+          @* Synced Providers *@
+          @if (_result?.Response?.SyncedProviders().Count > 0)
+          {
+              <ProviderBadgeRow
+                  Label="Synced"
+                  Providers="_result.Response.SyncedProviders().Keys"
+                  BadgeStyle="BadgeStyle.Success"
+                  ConfigService="ConfigService" />
+          }
+
+          @* Skipped Providers (OAuth) *@
+          @if (_result?.Response?.SkippedProviders().Count > 0)
+          {
+              <ProviderBadgeRow
+                  Label="OAuth"
+                  Providers="_result.Response.SkippedProviders().Keys"
+                  BadgeStyle="BadgeStyle.Info"
+                  Title="OAuth already configured - API key sync skipped"
+                  ConfigService="ConfigService" />
+          }
+
+          @* Validation Errors *@
+          @if (_result?.Response?.ValidationFailedProviders().Count > 0)
+          {
+              <RadzenAlert
+                  AlertStyle="AlertStyle.Warning"
+                  Variant="Variant.Flat"
+                  Shade="Shade.Lighter"
+                  AllowClose="false"
+                  role="alert">
+                  <strong>Invalid API keys:</strong>
+                  <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                      @foreach (var (provider, detail) in _result.Response.ValidationFailedProviders())
+                      {
+                          <li>
+                              <strong>@ConfigService.GetProviderDisplayName(provider):</strong>
+                              @detail.Error
+                          </li>
+                      }
+                  </ul>
+              </RadzenAlert>
+          }
+
+          @* Sync Failures *@
+          @if (_result?.Response?.FailedProviders().Count > 0)
+          {
+              <RadzenAlert
+                  AlertStyle="AlertStyle.Danger"
+                  Variant="Variant.Flat"
+                  Shade="Shade.Lighter"
+                  AllowClose="false"
+                  role="alert">
+                  <strong>Sync failures:</strong>
+                  <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                      @foreach (var (provider, detail) in _result.Response.FailedProviders())
+                      {
+                          <li>
+                              <strong>@ConfigService.GetProviderDisplayName(provider):</strong>
+                              @detail.Error
+                              @if (detail.Retryable)
+                              {
+                                  <RadzenBadge
+                                      BadgeStyle="BadgeStyle.Warning"
+                                      Text="Retryable"
+                                      Style="margin-left: 0.5rem; font-size: 0.75rem;" />
+                              }
+                              @if (detail.StatusCode != 0)
+                              {
+                                  <span style="color: var(--rz-text-tertiary-color); margin-left: 0.25rem;">
+                                      (HTTP @detail.StatusCode)
+                                  </span>
+                              }
+                          </li>
+                      }
+                  </ul>
+              </RadzenAlert>
+          }
+
+          @* Operation Error *@
+          @if (_result?.Error != null)
+          {
+              <RadzenAlert
+                  AlertStyle="AlertStyle.Danger"
+                  Variant="Variant.Flat"
+                  Shade="Shade.Lighter"
+                  AllowClose="true"
+                  Close="@DismissError"
+                  role="alert"
+                  aria-live="assertive">
+                  @_result.Error
+              </RadzenAlert>
+          }
+
+          @* Action Buttons *@
+          <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" role="group" aria-label="Auth actions">
+              <RadzenButton
+                  Text="@(AuthSyncService.IsOperationInProgress ? "Syncing..." : "Sync Keys")"
+                  Icon="sync"
+                  ButtonStyle="ButtonStyle.Primary"
+                  Click="SyncKeysAsync"
+                  Disabled="AuthSyncService.IsOperationInProgress"
+                  aria-label="Sync API keys from .env file"
+                  title="Load API keys from .env and sync to OpenCode server" />
+
+              @if (AuthSyncService.IsOperationInProgress)
+              {
+                  <RadzenButton
+                      Text="Cancel"
+                      Icon="cancel"
+                      ButtonStyle="ButtonStyle.Light"
+                      Click="CancelSync"
+                      aria-label="Cancel sync operation" />
+              }
+          </RadzenStack>
+
+          @if (AuthSyncService.IsOperationInProgress)
+          {
+              <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" aria-label="Syncing..." />
+          }
+
+          @* Help Text *@
+          <RadzenText TextStyle="TextStyle.Caption" Style="color: var(--rz-text-tertiary-color);">
+              Reads API keys from .env file using configured provider env vars.
+              Providers with OAuth configured are automatically skipped.
+          </RadzenText>
+
+      </RadzenStack>
+  </RadzenFieldset>
+
+  @code {
+      private AuthSyncResult? _result;
+      private CancellationTokenSource? _componentCts;
+
+      protected override void OnInitialized()
+      {
+          _componentCts = new CancellationTokenSource();
+      }
+
+      private async Task SyncKeysAsync()
+      {
+          try
+          {
+              _result = await AuthSyncService.SyncKeysAsync(
+                  skipOAuthProviders: true,
+                  cancellationToken: _componentCts?.Token ?? CancellationToken.None);
+          }
+          catch (InvalidOperationException ex)
+          {
+              Logger.LogWarning(ex, "Sync already in progress");
+          }
+          catch (Exception ex)
+          {
+              Logger.LogError(ex, "Unexpected error during sync");
+              _result = new AuthSyncResult
+              {
+                  Success = false,
+                  Error = "An unexpected error occurred"
+              };
+          }
+      }
+
+      private void CancelSync()
+      {
+          AuthSyncService.CancelCurrentOperation();
+      }
+
+      private string GetStatusIcon() => _result?.Response switch
+      {
+          null when _result == null => "hourglass_empty",
+          { } r when _result?.Success == false && _result?.Error != null => "error",
+          { } r when r.NoKeysFound() => "info",
+          { } r when r.HasSyncedAny() && !r.HasFailedAny() => "check_circle",
+          { } r when r.HasSyncedAny() && r.HasFailedAny() => "warning",
+          { } r when !r.HasSyncedAny() && r.HasFailedAny() => "error",
+          { } r when !r.HasSyncedAny() && r.HasSkippedAny() => "verified",
+          _ => "help"
+      };
+
+      private string GetStatusColor() => _result?.Response switch
+      {
+          null when _result == null => "color: var(--rz-text-disabled-color);",
+          _ when _result?.Success == false => "color: var(--rz-danger);",
+          { } r when r.NoKeysFound() => "color: var(--rz-text-secondary-color);",
+          { } r when r.HasSyncedAny() && !r.HasFailedAny() => "color: var(--rz-success);",
+          { } r when r.HasSyncedAny() && r.HasFailedAny() => "color: var(--rz-warning);",
+          { } r when !r.HasSyncedAny() && r.HasFailedAny() => "color: var(--rz-danger);",
+          _ => "color: var(--rz-text-disabled-color);"
+      };
+
+      private string GetStatusText()
+      {
+          if (_result == null)
+              return "Not synced";
+
+          if (_result.Success == false)
+              return _result.Error ?? "Operation failed";
+
+          if (_result.Response != null)
+              return _result.Response.GetSummary(ConfigService);
+
+          return "Unknown status";
+      }
+
+      private void DismissError()
+      {
+          if (_result is not null)
+          {
+              _result = new AuthSyncResult
+              {
+                  Response = _result.Response,
+                  Duration = _result.Duration,
+                  Success = _result.Success,
+                  Error = null
+              };
+          }
+      }
+
+      public void Dispose()
+      {
+          _componentCts?.Cancel();
+          _componentCts?.Dispose();
+      }
+  }

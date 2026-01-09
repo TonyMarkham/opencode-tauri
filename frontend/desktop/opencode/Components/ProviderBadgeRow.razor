@@ -1,0 +1,39 @@
+@namespace OpenCode.Components
+@using OpenCode.Services
+
+<RadzenRow AlignItems="AlignItems.Center">
+    <RadzenColumn Size="3">
+        <RadzenText TextStyle="TextStyle.Body2" Style="color: var(--rz-text-secondary-color);">
+            @Label
+        </RadzenText>
+    </RadzenColumn>
+    <RadzenColumn Size="9">
+        <RadzenStack Orientation="Orientation.Horizontal" Wrap="FlexWrap.Wrap" Gap="0.5rem">
+            @foreach (var provider in Providers)
+            {
+                <RadzenBadge
+                    BadgeStyle="@BadgeStyle"
+                    Text="@ConfigService.GetProviderDisplayName(provider)"
+                    title="@Title"
+                    Style="font-size: 0.875rem;" />
+            }
+        </RadzenStack>
+    </RadzenColumn>
+</RadzenRow>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Label { get; set; }
+
+    [Parameter, EditorRequired]
+    public required IEnumerable<string> Providers { get; set; }
+
+    [Parameter, EditorRequired]
+    public required BadgeStyle BadgeStyle { get; set; }
+
+    [Parameter, EditorRequired]
+    public required IConfigService ConfigService { get; set; }
+
+    [Parameter]
+    public string? Title { get; set; }
+}

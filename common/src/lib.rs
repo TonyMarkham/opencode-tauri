@@ -13,5 +13,10 @@
 //! This layered architecture keeps concerns separated and makes testing easier.
 
 pub mod error;
+pub mod redacted_key;
+pub mod http_status;
 
 pub use error::error_location::ErrorLocation;
+pub use error::redact_error::RedactError;
+pub use redacted_key::RedactedApiKey;
+pub use http_status::HttpStatusCode;

@@ -42,4 +42,8 @@ builder.Services.Configure<RetryPolicyOptions>(options =>
 builder.Services.AddSingleton<IRetryPolicy, RetryPolicy>();
 builder.Services.AddSingleton<IConfigService, ConfigService>();
 
+// Register auth sync services
+builder.Services.AddSingleton<IAuthSyncMetrics, AuthSyncMetrics>();
+builder.Services.AddSingleton<IAuthSyncService, AuthSyncService>();
+
 await builder.Build().RunAsync();

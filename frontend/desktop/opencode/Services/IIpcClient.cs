@@ -13,7 +13,7 @@ public interface IIpcClient : IAsyncDisposable
     /// </summary>
     /// <exception cref="Exceptions.IpcConnectionException">WebSocket connection failed.</exception>
     /// <exception cref="Exceptions.IpcAuthenticationException">Authentication failed.</exception>
-    Task ConnectAsync();
+    Task ConnectAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns true if currently connected and authenticated.
@@ -112,4 +112,18 @@ public interface IIpcClient : IAsyncDisposable
     /// <exception cref="Exceptions.IpcConnectionException">Not connected to IPC.</exception>
     /// <exception cref="Exceptions.IpcTimeoutException">Request timed out.</exception>
     Task<(AppConfig App, ModelsConfig Models)> GetConfigAsync(CancellationToken cancellationToken = default);
+    
+    // Auth sync operations
+
+    /// <summary>
+    /// Syncs API keys from .env to OpenCode server.
+    /// </summary>
+    /// <param name="skipOAuthProviders">Skip providers with existing OAuth config.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Sync result with synced/failed/skipped providers.</returns>
+    /// <exception cref="Exceptions.IpcConnectionException">Not connected to IPC.</exception>
+    /// <exception cref="Exceptions.IpcTimeoutException">Request timed out.</exception>
+    Task<IpcAuthSyncResponse> SyncAuthKeysAsync(
+        bool skipOAuthProviders = true,
+        CancellationToken cancellationToken = default);
 }

@@ -32,19 +32,20 @@ use crate::ipc::handle::IpcServerHandle;
 use crate::ipc::state::{IpcState, StateCommand};
 use crate::proto::IpcErrorCode::{AuthError, InternalError, InvalidMessage, NotImplemented};
 use crate::proto::{
-    IpcAuthHandshakeResponse, IpcCheckHealthResponse, IpcClientMessage, IpcCreateSessionRequest,
-    IpcDeleteSessionRequest, IpcDeleteSessionResponse, IpcDiscoverServerResponse, IpcErrorCode,
-    IpcErrorResponse, IpcGetConfigResponse, IpcServerMessage, IpcSpawnServerRequest,
-    IpcSpawnServerResponse, IpcStopServerResponse, IpcUpdateConfigRequest, IpcUpdateConfigResponse,
-    ipc_client_message, ipc_server_message,
+    IpcAuthHandshakeResponse, IpcAuthSyncResponse, IpcCheckHealthResponse, IpcClientMessage,
+    IpcCreateSessionRequest, IpcDeleteSessionRequest, IpcDeleteSessionResponse,
+    IpcDiscoverServerResponse, IpcErrorCode, IpcErrorResponse, IpcGetConfigResponse,
+    IpcProviderSyncResult, IpcServerMessage, IpcSpawnServerRequest, IpcSpawnServerResponse,
+    IpcStopServerResponse, IpcSyncAuthKeysRequest, IpcUpdateConfigRequest,
+    IpcUpdateConfigResponse, ipc_client_message, ipc_server_message,
 };
+use crate::proto::session::OcSessionList;
 
 use common::ErrorLocation;
 
 use std::net::SocketAddr;
 use std::panic::Location;
 
-use crate::proto::session::OcSessionList;
 use futures_util::{SinkExt, StreamExt};
 use log::{error, info, warn};
 use prost::Message as ProstMessage;
@@ -430,7 +431,12 @@ async fn handle_message(
         Payload::GetConfig(_req) => handle_get_config(config_state, request_id, write).await, // 🆕 NEW
         Payload::UpdateConfig(req) => {
             handle_update_config(config_state, request_id, req, write).await
-        } // 🆕 NEW
+        }
+
+        // Auth Sync Operations
+        Payload::SyncAuthKeys(req) => {
+            handle_sync_auth_keys(config_state, state, request_id, req, write).await
+        }
 
         // Auth handshake should not appear after initial auth
         Payload::AuthHandshake(_) => {
@@ -834,4 +840,138 @@ async fn handle_update_config(
             send_protobuf_response(write, &response).await
         }
     }
+}
+
+async fn handle_sync_auth_keys(
+    config_state: &ConfigState,
+    state: &IpcState,
+    request_id: u64,
+    req: IpcSyncAuthKeysRequest,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+        tokio_tungstenite::tungstenite::Message,
+    >,
+) -> Result<(), IpcError> {
+    use crate::auth_sync::{load_env_api_keys, oauth::check_oauth_status};
+    use std::time::Instant;
+
+    info!("Handling sync_auth_keys request (skip_oauth={})", req.skip_oauth_providers);
+
+    let start = Instant::now();
+
+    // Load models config
+    let models_config = config_state.get_models_config().await;
+
+    // Get OpenCode client
+    let opencode_client = match state.get_opencode_client().await {
+        Some(client) => client,
+        None => {
+            error!("No OpenCode server connected");
+            send_error_response(
+                write,
+                request_id,
+                InternalError,
+                "No OpenCode server connected",
+            )
+                .await?;
+            return Ok(());
+        }
+    };
+
+    // Load API keys from environment
+    let loaded_keys = load_env_api_keys(&models_config);
+
+    let mut synced = Vec::new();
+    let mut failed = Vec::new();
+    let mut skipped = Vec::new();
+
+    // Process each loaded key
+    for (provider, key) in &loaded_keys.keys {
+        // Check OAuth status if requested
+        if req.skip_oauth_providers {
+            match check_oauth_status(provider) {
+                Ok(status) if status.should_skip_api_key_sync() => {
+                    info!("Skipping provider '{}' - OAuth configured", provider);
+                    skipped.push(IpcProviderSyncResult {
+                        provider: provider.clone(),
+                        error: String::new(),
+                        retryable: false,
+                        error_category: String::new(),
+                        status_code: None,
+                    });
+                    continue;
+                }
+                Ok(_) => {} // Not OAuth, proceed with sync
+                Err(e) => {
+                    warn!("Failed to check OAuth status for '{}': {}, proceeding with sync", provider, e);
+                }
+            }
+        }
+
+        // Sync to OpenCode server
+        match opencode_client.sync_api_key(provider, key.as_str()).await {
+            Ok(_) => {
+                info!("Successfully synced key for provider '{}'", provider);
+                synced.push(IpcProviderSyncResult {
+                    provider: provider.clone(),
+                    error: String::new(),
+                    retryable: false,
+                    error_category: String::new(),
+                    status_code: None,
+                });
+            }
+            Err(e) => {
+                error!("Failed to sync key for provider '{}': {}", provider, e);
+                failed.push(IpcProviderSyncResult {
+                    provider: provider.clone(),
+                    error: e.to_string(),
+                    retryable: false, // TODO: Determine from error type
+                    error_category: "sync_error".to_string(),
+                    status_code: None,
+                });
+            }
+        }
+    }
+
+    // Convert validation errors
+    let validation_failed: Vec<IpcProviderSyncResult> = loaded_keys
+        .validation_errors
+        .iter()
+        .map(|(provider, err)| {
+            warn!("Validation failed for provider '{}': {}", provider, err);
+            IpcProviderSyncResult {
+                provider: provider.clone(),
+                error: err.to_string(),
+                retryable: false,
+                error_category: err.error_category().to_string(),
+                status_code: err.status_code().map(|c| c as u32),
+            }
+        })
+        .collect();
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+
+    info!(
+          "Auth sync completed in {}ms: {} synced, {} failed, {} skipped, {} invalid",
+          duration_ms,
+          synced.len(),
+          failed.len(),
+          skipped.len(),
+          validation_failed.len()
+      );
+
+    let response = IpcAuthSyncResponse {
+        synced,
+        failed,
+        skipped,
+        validation_failed,
+        duration_ms,
+    };
+
+    let server_msg = IpcServerMessage {
+        request_id,
+        payload: Some(ipc_server_message::Payload::AuthSyncResponse(response)),
+    };
+
+    send_protobuf_response(write, &server_msg).await
 }

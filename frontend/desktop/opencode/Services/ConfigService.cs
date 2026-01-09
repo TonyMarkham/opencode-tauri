@@ -182,4 +182,10 @@
           _ipcClient.ConnectionStateChanged -= OnConnectionStateChanged;
           _loadLock.Dispose();
       }
+      
+      public string GetProviderDisplayName(string providerId)
+      {
+          var provider = ModelsConfig?.Providers.FirstOrDefault(p => p.Name == providerId);
+          return provider?.DisplayName ?? providerId;
+      }
   }

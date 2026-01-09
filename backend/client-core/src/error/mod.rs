@@ -4,6 +4,8 @@ pub mod ipc;
 pub mod opencode_client;
 pub mod spawn;
 pub mod ws;
+pub mod auth_sync;
+pub use auth_sync::{AuthSyncError, KeyValidationFailure};
 
 use thiserror::Error;
 

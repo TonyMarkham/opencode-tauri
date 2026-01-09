@@ -111,4 +111,44 @@ impl OpencodeClient {
 
         Ok(response.status().is_success())
     }
+
+    /// Sync an API key for a provider to the OpenCode server.
+    ///
+    /// # Arguments
+    /// * `provider` - Provider ID (e.g., "openai")
+    /// * `api_key` - The API key value
+    ///
+    /// # Errors
+    /// Returns [`OpencodeClientError`] if the HTTP request fails or server rejects the key.
+    pub async fn sync_api_key(
+        &self,
+        provider: &str,
+        api_key: &str,
+    ) -> Result<(), OpencodeClientError> {
+        let url = self.base_url.join(&format!("auth/{}", provider))?;
+
+        let body = serde_json::json!({
+            "type": "api",
+            "key": api_key
+        });
+
+        let response = self
+            .prepare_request(self.client.put(url))
+            .json(&body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(OpencodeClientError::Server {
+                message: format!(
+                    "HTTP {} - {}",
+                    response.status().as_u16(),
+                    response.text().await.unwrap_or_default()
+                ),
+                location: ErrorLocation::from(Location::caller()),
+            });
+        }
+
+        Ok(())
+    }
 }

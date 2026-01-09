@@ -52,6 +52,10 @@ message IpcClientMessage {
     // Config Operations (60-69)
     IpcGetConfigRequest get_config = 60;
     IpcUpdateConfigRequest update_config = 61;
+
+    // Auth Sync (62-63) - uses 60s range for config/auth operations
+    IpcSyncAuthKeysRequest sync_auth_keys = 62;
+    IpcGetOAuthStatusRequest get_oauth_status = 63;
   }
 }
 
@@ -84,8 +88,12 @@ message IpcServerMessage {
     opencode.auth.OcAuth auth_info = 50;
 
     // Config Operations (60-69)  // 🆕 NEW
-    IpcGetConfigResponse get_config_response = 60;  // 🆕 NEW
-    IpcUpdateConfigResponse update_config_response = 61;  // 🆕 NEW
+    IpcGetConfigResponse get_config_response = 60;
+    IpcUpdateConfigResponse update_config_response = 61;
+
+    // Auth Sync Status (62-63)
+    IpcAuthSyncResponse auth_sync_response = 62;
+    IpcOAuthStatusResponse oauth_status_response = 63;
 
     // Errors (100+)
     IpcErrorResponse error = 100;
@@ -211,6 +219,8 @@ enum IpcErrorCode {
   IPC_ERROR_CODE_INTERNAL_ERROR = 4;   // Internal server error
   IPC_ERROR_CODE_NO_SERVER = 5;        // No OpenCode server connected
   IPC_ERROR_CODE_SERVER_ERROR = 6;     // OpenCode server operation failed
+  IPC_ERROR_CODE_AUTH_SYNC_FAILED = 7;       // Auth sync operation failed
+  IPC_ERROR_CODE_KEY_VALIDATION_FAILED = 8;  // API key validation failed
 }
 
 message IpcErrorResponse {
@@ -236,4 +246,65 @@ message IpcUpdateConfigRequest {
 message IpcUpdateConfigResponse {
   bool success = 1;
   optional string error = 2;
+}
+
+// ============================================
+// AUTH SYNC OPERATIONS
+// ============================================
+
+// Request to sync API keys from .env to OpenCode server
+message IpcSyncAuthKeysRequest {
+  // If true, skip providers with existing OAuth (default: true)
+  bool skip_oauth_providers = 1;
+  // Overall timeout in seconds (default: 30)
+  uint32 timeout_secs = 2;
+}
+
+// Response with sync results per provider
+message IpcAuthSyncResponse {
+  // Successfully synced providers
+  repeated IpcProviderSyncResult synced = 1;
+  // Failed providers with error details
+  repeated IpcProviderSyncResult failed = 2;
+  // Skipped providers (OAuth detected)
+  repeated IpcProviderSyncResult skipped = 3;
+  // Providers with validation errors (never sent to server)
+  repeated IpcProviderSyncResult validation_failed = 4;
+  // Total operation time in milliseconds
+  uint64 duration_ms = 5;
+}
+
+// Individual provider sync result
+message IpcProviderSyncResult {
+  // Provider ID (e.g., "openai")
+  string provider = 1;
+  // Error message (empty on success)
+  string error = 2;
+  // True if this error is retryable
+  bool retryable = 3;
+  // Error category for metrics (e.g., "timeout", "client_error")
+  string error_category = 4;
+  // HTTP status code if applicable
+  optional uint32 status_code = 5;
+}
+
+// Request to check OAuth status for a provider
+message IpcGetOAuthStatusRequest {
+  string provider_id = 1;
+}
+
+// OAuth status response
+message IpcOAuthStatusResponse {
+  // The status
+  OAuthStatusType status = 1;
+  // Reason if status is UNKNOWN
+  optional string reason = 2;
+}
+
+enum OAuthStatusType {
+  OAUTH_STATUS_TYPE_UNKNOWN = 0;
+  OAUTH_STATUS_TYPE_CONFIGURED = 1;      // OAuth is configured
+  OAUTH_STATUS_TYPE_API_KEY = 2;         // API key auth configured
+  OAUTH_STATUS_TYPE_WELL_KNOWN = 3;      // Well-known auth configured
+  OAUTH_STATUS_TYPE_NOT_CONFIGURED = 4;  // No auth configured
 }
