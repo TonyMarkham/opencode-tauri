@@ -1,293 +1,133 @@
-# Next Session: Session 10 - Settings Panel (Server Section)
+# Next Session: Session 11 - Settings Panel (Models Section)
 
 ## Quick Context
 
-**What We Completed (Sessions 5-9):**
+**What We Completed (Sessions 5-10):**
 
 - ✅ IPC WebSocket server with binary protobuf protocol
 - ✅ Session handlers (list/create/delete) via OpenCode HTTP API
 - ✅ C# IPC client with production-grade WebSocket management
 - ✅ Home.razor displaying sessions using Radzen components
-- ✅ Config management system with IPC handlers
+- ✅ Config management system with IPC handlers (get_config/update_config)
+- ✅ Settings modal with Server section (discover/spawn/stop server controls)
 
 **Current State:**
 
 - App launches, loads config, connects to IPC server via WebSocket
 - Blazor authenticates and can list/create/delete sessions
-- Config is available via IPC (get_config/update_config)
-- **BUT:** No UI for settings - users can't see server status or start/stop servers
+- Settings modal shows server status with Start/Stop/Refresh controls
+- Config includes models.toml with 9 curated models across 4 providers
+- **BUT:** No UI for viewing or selecting models - users can't see available models or set a default
 
 ---
 
-## Your Mission: Session 10
+## Your Mission: Session 11
 
-Create a Settings modal dialog with a Server section that displays:
-- Connection status (icon + text)
-- Server URL, PID, Owned status
-- Buttons: Refresh, Start Server, Stop Server
+Create a Models section in the Settings modal and a footer model selector:
+- Display curated models from config in a DataGrid
+- Default model dropdown in Settings
+- Compact model selector in footer for quick access
 
----
-
-## Implementation Plan
-
-### Step 1: Add Server Methods to IIpcClient Interface
-
-**File:** `frontend/desktop/opencode/Services/IIpcClient.cs`
-
-**Add after `DeleteSessionAsync`:**
-```csharp
-// Server management operations
-
-/// <summary>
-/// Discovers running OpenCode servers.
-/// </summary>
-/// <returns>Server info if found, null if no server running.</returns>
-Task<IpcServerInfo?> DiscoverServerAsync(CancellationToken cancellationToken = default);
-
-/// <summary>
-/// Spawns a new OpenCode server.
-/// </summary>
-/// <param name="port">Preferred port (optional).</param>
-/// <returns>Spawned server info.</returns>
-Task<IpcServerInfo> SpawnServerAsync(uint? port = null, CancellationToken cancellationToken = default);
-
-/// <summary>
-/// Stops the OpenCode server (only works if we spawned it).
-/// </summary>
-/// <returns>True if stopped successfully.</returns>
-Task<bool> StopServerAsync(CancellationToken cancellationToken = default);
-
-/// <summary>
-/// Checks if the OpenCode server is healthy.
-/// </summary>
-/// <returns>True if server is responding.</returns>
-Task<bool> CheckServerHealthAsync(CancellationToken cancellationToken = default);
-```
-
-**Verification:** `dotnet build` should fail (IpcClient doesn't implement new methods yet)
+**Full implementation plan:** See `Session_11_Plan.md`
 
 ---
 
-### Step 2: Implement Server Methods in IpcClient
+## Key Architecture Points
 
-**File:** `frontend/desktop/opencode/Services/IpcClient.cs`
+### Config Structure (already exists in backend)
 
-**Add after `DeleteSessionAsync` method (~line 479):**
-
-```csharp
-public async Task<IpcServerInfo?> DiscoverServerAsync(CancellationToken cancellationToken = default)
-{
-    var request = new IpcClientMessage
-    {
-        DiscoverServer = new IpcDiscoverServerRequest()
-    };
-
-    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
-    return response.DiscoverServerResponse?.Server;
+**ModelsConfig** (from `models.toml`):
+```rust
+pub struct ModelsConfig {
+    pub providers: Vec<ProviderConfig>,  // 4 providers
+    pub models: ModelsSection,
 }
 
-public async Task<IpcServerInfo> SpawnServerAsync(uint? port = null, CancellationToken cancellationToken = default)
-{
-    var request = new IpcClientMessage
-    {
-        SpawnServer = new IpcSpawnServerRequest { Port = port ?? 0 }
-    };
-
-    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
-    return response.SpawnServerResponse.Server;
+pub struct ModelsSection {
+    pub default_model: String,           // e.g., "openai/gpt-5.1-2025-11-13"
+    pub curated: Vec<CuratedModel>,      // 9 models
 }
 
-public async Task<bool> StopServerAsync(CancellationToken cancellationToken = default)
-{
-    var request = new IpcClientMessage
-    {
-        StopServer = new IpcStopServerRequest()
-    };
-
-    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
-    return response.StopServerResponse.Success;
-}
-
-public async Task<bool> CheckServerHealthAsync(CancellationToken cancellationToken = default)
-{
-    var request = new IpcClientMessage
-    {
-        CheckHealth = new IpcCheckHealthRequest()
-    };
-
-    var response = await SendRequestAsync(request, cancellationToken: cancellationToken);
-    return response.CheckHealthResponse.Healthy;
+pub struct CuratedModel {
+    pub name: String,      // "gpt-5.1-2025-11-13"
+    pub provider: String,  // "openai"
+    pub model_id: String,  // "gpt-5.1-2025-11-13"
 }
 ```
 
-**Verification:** `dotnet build` should succeed
-
----
-
-### Step 3: Create Components Directory
-
-**Create directory:** `frontend/desktop/opencode/Components/`
-
-```bash
-mkdir -p frontend/desktop/opencode/Components
-```
-
----
-
-### Step 4: Create ServerSection Component
-
-**File to create:** `frontend/desktop/opencode/Components/ServerSection.razor`
-
-This component displays server status and provides control buttons.
-
-**Key elements:**
-- Status row with icon (green=connected, gray=disconnected, yellow=unhealthy)
-- URL, PID, Owned rows (only shown when connected)
-- Error alert (dismissible)
-- Button row: Refresh, Start Server, Stop Server
-- Loading progress bar
-
-**Pattern to follow:** Copy error handling and async patterns from `Home.razor`
-
-**See `Session_10_Plan.md` for complete component code.**
-
----
-
-### Step 5: Create SettingsModal Component
-
-**File to create:** `frontend/desktop/opencode/Components/SettingsModal.razor`
-
-Simple modal shell using RadzenDialog:
-- Title: "Settings"
-- Contains: ServerSection component
-- Has Show()/Hide() methods for parent to call
-
-**See `Session_10_Plan.md` for complete component code.**
-
----
-
-### Step 6: Update _Imports.razor
-
-**File:** `frontend/desktop/opencode/_Imports.razor`
-
-**Add:**
-```razor
-@using OpenCode.Components
-```
-
----
-
-### Step 7: Add Settings Button to MainLayout
-
-**File:** `frontend/desktop/opencode/Layout/MainLayout.razor`
-
-**Modify to:**
-1. Add a settings button (gear icon) in top-row
-2. Add SettingsModal component reference
-3. Wire button click to show modal
-
-```razor
-@inherits LayoutComponentBase
-
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            <RadzenButton 
-                Icon="settings" 
-                ButtonStyle="ButtonStyle.Light" 
-                Variant="Variant.Text"
-                Click="@(() => _settingsModal?.Show())"
-                title="Settings" />
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
-
-<SettingsModal @ref="_settingsModal" />
-
-@code {
-    private SettingsModal? _settingsModal;
-}
-```
-
----
-
-## Proto Message Reference
-
-The proto messages you'll use are already defined in `proto/ipc.proto`:
+### IPC Protocol (already exists)
 
 ```protobuf
-// IpcClientMessage.payload options:
-IpcDiscoverServerRequest discover_server = 15;
-IpcSpawnServerRequest spawn_server = 16;
-IpcCheckHealthRequest check_health = 17;
-IpcStopServerRequest stop_server = 18;
+// Request
+message IpcGetConfigRequest {}
 
-// IpcServerMessage.payload options:
-IpcDiscoverServerResponse discover_server_response = 15;
-IpcSpawnServerResponse spawn_server_response = 16;
-IpcCheckHealthResponse check_health_response = 17;
-IpcStopServerResponse stop_server_response = 18;
-
-// Server info structure:
-message IpcServerInfo {
-  uint32 pid = 1;
-  uint32 port = 2;
-  string base_url = 3;
-  string name = 4;
-  string command = 5;
-  bool owned = 6;  // true = we spawned it
+// Response
+message IpcGetConfigResponse {
+  string app_config_json = 1;     // JSON-serialized AppConfig
+  string models_config_json = 2;  // JSON-serialized ModelsConfig
 }
 ```
+
+### Known Limitation
+
+**Default model persistence not available in Session 11:**
+- `default_model` is in `ModelsConfig`, not `AppConfig`
+- Backend only has `UpdateAppConfig` handler, not `UpdateModelsConfig`
+- Implement display-only for now, add persistence in future session
+
+---
+
+## Implementation Steps (Summary)
+
+1. **Create ConfigModels.cs** - C# DTOs matching Rust structs
+2. **Add to IIpcClient.cs** - `GetConfigAsync()` method signature
+3. **Add ConfigUpdateException.cs** - New exception type
+4. **Implement in IpcClient.cs** - `GetConfigAsync()` with JSON deserialization
+5. **Create ModelsSection.razor** - Settings section with DataGrid and dropdown
+6. **Update SettingsModal.razor** - Add `<ModelsSection />`
+7. **Create ModelSelector.razor** - Compact footer dropdown
+8. **Update MainLayout.razor** - Add footer with ModelSelector
+9. **Add CSS** - Footer styling in MainLayout.razor.css
 
 ---
 
 ## Success Criteria
 
 - [ ] `dotnet build` succeeds
-- [ ] Settings button (gear icon) visible in top-right header
-- [ ] Clicking settings opens modal dialog
-- [ ] Server section displays:
-  - [ ] Status with icon (green check = connected, gray X = not connected)
-  - [ ] URL, PID, Owned (when connected)
-- [ ] "Refresh" button discovers server and updates display
-- [ ] "Start Server" button spawns server (disabled when already connected)
-- [ ] "Stop Server" button stops server (disabled if not owned or not connected)
-- [ ] Loading indicator shown during async operations
-- [ ] Errors displayed in alert box
-- [ ] ESC key closes modal
-- [ ] X button closes modal
+- [ ] Settings modal shows Models section (below Server section)
+- [ ] Models section has:
+  - [ ] Default model dropdown
+  - [ ] DataGrid with name, provider, model_id columns
+  - [ ] Provider badges (color-coded by provider)
+  - [ ] Refresh button
+  - [ ] Loading/error states
+- [ ] Footer appears at bottom with ModelSelector
+- [ ] ModelSelector shows all curated models
+- [ ] Selection works (local state only - no persistence)
 
 ---
 
 ## Key Files to Reference
 
 **Existing patterns:**
-- `frontend/desktop/opencode/Pages/Home.razor` - Async patterns, error handling, Radzen components
-- `frontend/desktop/opencode/Services/IpcClient.cs` - SendRequestAsync pattern
-- `proto/ipc.proto` - Message definitions
+- `frontend/desktop/opencode/Components/ServerSection.razor` - Component pattern
+- `frontend/desktop/opencode/Services/IpcClient.cs` - Request/response pattern
+- `backend/client-core/src/config/models.rs` - Rust struct definitions
+- `apps/desktop/opencode/config/models.toml` - Actual model data
 
-**Full implementation details:**
-- `Session_10_Plan.md` - Complete code for all components
+**Full plan:**
+- `Session_11_Plan.md` - Complete implementation details with code snippets
 
 ---
 
 ## Important Reminders
 
-1. **Follow Home.razor patterns** for error handling and loading states
-2. **Use Radzen components** (RadzenDialog, RadzenButton, RadzenAlert, etc.)
-3. **Handle all exceptions** - wrap async calls in try/catch
+1. **Follow ServerSection patterns** - async, disposal, error handling
+2. **Use `PropertyNameCaseInsensitive = true`** when deserializing JSON
+3. **Production quality** - null checks, cancellation tokens, structured logging
 4. **Test incrementally** - build after each step
-5. **Proto field names** - C# uses PascalCase (e.g., `DiscoverServerResponse`, `BaseUrl`)
+5. **Note the persistence limitation** - add TODO comment for future work
 
 ---
 
-**Start with:** Step 1 - Add interface methods to `IIpcClient.cs`
+**Start with:** Step 1 - Create `ConfigModels.cs` with DTO classes

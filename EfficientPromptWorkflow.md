@@ -6,7 +6,7 @@
 
 ### Init
 ```txt
-We have now implemented session 8
+We have now implemented session 10
 ```
 
 ### Followup
@@ -16,7 +16,7 @@ Looks like we have finished Phase 1, if you agree, can you please update `SESSIO
 
 ### Plan
 ```txt
-Please look at planning how to implement Session 9 1st to give the deleoper agent a solid foundation. Recognize, your role is to plan, not to code.
+Please look at planning how to implement Session 11 1st to give the deleoper agent a solid foundation. Recognize, your role is to plan, not to code.
 ```
 
 ---
@@ -50,7 +50,7 @@ I want you to plan to give me something that's over 9 out of 10 on a production 
 
 ### Document
 ```txt
-Can you please serialize that to `session_10_prod_plan.md`?
+Can you please serialize that to `session_11_prod_plan.md`?
 ```
 
 ---

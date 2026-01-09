@@ -196,15 +196,39 @@
 
 ---
 
-### Session 10: Settings Panel - Server Section
+### Session 10: Settings Panel - Server Section ✅ COMPLETE
 **Demo:** Settings modal opens, shows server status.
 
-- Settings button in footer
-- Modal dialog with Server section
-- Display: base URL, PID, owned status
-- Buttons: Reconnect, Start, Stop
+**Completed (2026-01-08):**
+- ✅ Settings button (gear icon) in top header bar
+- ✅ Modal dialog with Server section (SettingsModal.razor)
+- ✅ ServerSection.razor component with:
+  - Status display with color-coded icons (green=connected, gray=disconnected, yellow=unhealthy)
+  - URL, PID, Owned status rows (only shown when connected)
+  - Buttons: Refresh, Start Server, Stop Server
+  - Loading progress bar during async operations
+  - Error alert with dismissible messages
+- ✅ Server management methods in IIpcClient interface
+- ✅ IpcClient implementation with production patterns:
+  - Null-safe response handling
+  - Specific exception types (ServerDiscoveryException, ServerSpawnException, etc.)
+  - CancellationToken support throughout
+  - Structured logging with semantic fields
+- ✅ ServerErrorMessages.cs for centralized, i18n-ready error messages
+- ✅ IDisposable pattern with proper cleanup in ServerSection
+- ✅ ARIA labels for accessibility
 
-**Success:** Can see server status in settings
+**Files created:**
+- `frontend/desktop/opencode/Components/SettingsModal.razor` - Modal shell
+- `frontend/desktop/opencode/Components/ServerSection.razor` - Server status UI
+- `frontend/desktop/opencode/Services/ServerErrorMessages.cs` - Error constants
+
+**Files modified:**
+- `frontend/desktop/opencode/Services/IIpcClient.cs` - Server methods interface
+- `frontend/desktop/opencode/Services/IpcClient.cs` - Server methods implementation
+- `frontend/desktop/opencode/Layout/MainLayout.razor` - Settings button + modal
+
+**Success:** Settings button opens modal, shows server status with Start/Stop/Refresh controls
 
 ---
 
@@ -643,7 +667,7 @@
 | Phase | Sessions | Features | Status |
 |-------|----------|----------|--------|
 | 1. Communication | 5-8 (incl. 6.5) | IPC server + client + JSON normalizer | ✅ COMPLETE |
-| 2. Config & Auth | 9-12 | Settings, models, API key sync | 🔄 IN PROGRESS (Session 9 done) |
+| 2. Config & Auth | 9-12 | Settings, models, API key sync | 🔄 IN PROGRESS (Sessions 9-10 done) |
 | 3. Basic Chat | 13-16 | Send/receive messages, streaming | |
 | 4. Agents | 17-19 | Agent pane, selection, filtering | |
 | 5. Tools | 20-24 | Tool display, permissions, cancellation | |
@@ -655,4 +679,4 @@
 | 11. Ship | 43-45 | Polish and release | |
 
 **Total: 42 sessions (Sessions 5-45, including 6.5)**
-**Progress: Phase 1 complete + Session 9 done = 7 implementation sessions completed**
+**Progress: Phase 1 complete + Sessions 9-10 done = 8 implementation sessions completed**
