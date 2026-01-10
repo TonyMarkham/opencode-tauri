@@ -51,13 +51,13 @@ impl KeyValidator {
             },
             "google" | "google_generativeai" => Self {
                 provider: config.name.clone(),
-                expected_prefix: Some("AI"),  // Google keys start with AI
+                expected_prefix: Some("AI"), // Google keys start with AI
                 min_length: 30,
                 max_length: 100,
             },
             "mistral" => Self {
                 provider: config.name.clone(),
-                expected_prefix: None,  // Mistral uses UUIDs
+                expected_prefix: None, // Mistral uses UUIDs
                 min_length: 32,
                 max_length: 64,
             },
@@ -71,8 +71,8 @@ impl KeyValidator {
             _ => Self {
                 provider: config.name.clone(),
                 expected_prefix: None,
-                min_length: 10,   // Minimum reasonable key length
-                max_length: 500,  // Allow long keys
+                min_length: 10,  // Minimum reasonable key length
+                max_length: 500, // Allow long keys
             },
         }
     }
@@ -117,7 +117,9 @@ impl KeyValidator {
 
         // Check for placeholder patterns
         if let Some(pattern) = detect_placeholder(trimmed) {
-            return ValidationResult::Invalid(KeyValidationFailure::PlaceholderDetected { pattern });
+            return ValidationResult::Invalid(KeyValidationFailure::PlaceholderDetected {
+                pattern,
+            });
         }
 
         // Check for invalid characters (keys should be alphanumeric + limited symbols)
@@ -187,7 +189,6 @@ fn detect_placeholder(key: &str) -> Option<&'static str> {
 ///
 /// Valid: alphanumeric, hyphen, underscore, period, colon
 fn is_valid_key_chars(key: &str) -> bool {
-    key.chars().all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':')
-    })
+    key.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'))
 }

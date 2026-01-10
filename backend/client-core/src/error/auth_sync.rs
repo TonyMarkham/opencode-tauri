@@ -73,10 +73,21 @@ pub enum AuthSyncError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyValidationFailure {
     Empty,
-    TooShort { min: usize, actual: usize },
-    TooLong { max: usize, actual: usize },
-    InvalidPrefix { expected: &'static str, actual: String },
-    PlaceholderDetected { pattern: &'static str },
+    TooShort {
+        min: usize,
+        actual: usize,
+    },
+    TooLong {
+        max: usize,
+        actual: usize,
+    },
+    InvalidPrefix {
+        expected: &'static str,
+        actual: String,
+    },
+    PlaceholderDetected {
+        pattern: &'static str,
+    },
     InvalidCharacters,
 }
 
@@ -173,7 +184,7 @@ impl AuthSyncError {
             return AuthSyncError::ProviderSync {
                 provider,
                 message: error.to_string(),
-                status_code: HttpStatusCode(status.as_u16()),  // No longer wrapped in Some()
+                status_code: HttpStatusCode(status.as_u16()), // No longer wrapped in Some()
                 location: ErrorLocation::from(Location::caller()),
             };
         }
@@ -198,7 +209,7 @@ impl AuthSyncError {
         AuthSyncError::ProviderSync {
             provider: provider.into(),
             message: body.into(),
-            status_code: HttpStatusCode(status_code),  // No longer wrapped in Some()
+            status_code: HttpStatusCode(status_code), // No longer wrapped in Some()
             location: ErrorLocation::from(Location::caller()),
         }
     }
@@ -207,14 +218,14 @@ impl AuthSyncError {
     pub fn is_retryable(&self) -> bool {
         match self {
             // Network errors: timeouts and connection failures are retryable
-            AuthSyncError::Network { is_timeout, is_connection, .. } => {
-                *is_timeout || *is_connection
-            }
+            AuthSyncError::Network {
+                is_timeout,
+                is_connection,
+                ..
+            } => *is_timeout || *is_connection,
 
             // HTTP errors: check status code directly (no longer Option)
-            AuthSyncError::ProviderSync { status_code, .. } => {
-                status_code.is_retryable()
-            }
+            AuthSyncError::ProviderSync { status_code, .. } => status_code.is_retryable(),
 
             // These are never retryable
             AuthSyncError::Cancelled { .. } => false,
@@ -231,11 +242,20 @@ impl AuthSyncError {
     pub fn error_category(&self) -> &'static str {
         match self {
             AuthSyncError::EnvLoad { .. } => "env_load",
-            AuthSyncError::ProviderSync { status_code, .. } if status_code.is_client_error() => "client_error",
-            AuthSyncError::ProviderSync { status_code, .. } if status_code.is_server_error() => "server_error",
+            AuthSyncError::ProviderSync { status_code, .. } if status_code.is_client_error() => {
+                "client_error"
+            }
+            AuthSyncError::ProviderSync { status_code, .. } if status_code.is_server_error() => {
+                "server_error"
+            }
             AuthSyncError::ProviderSync { .. } => "provider_sync",
-            AuthSyncError::Network { is_timeout: true, .. } => "timeout",
-            AuthSyncError::Network { is_connection: true, .. } => "connection",
+            AuthSyncError::Network {
+                is_timeout: true, ..
+            } => "timeout",
+            AuthSyncError::Network {
+                is_connection: true,
+                ..
+            } => "connection",
             AuthSyncError::Network { .. } => "network",
             AuthSyncError::Cancelled { .. } => "cancelled",
             AuthSyncError::NoServer { .. } => "no_server",

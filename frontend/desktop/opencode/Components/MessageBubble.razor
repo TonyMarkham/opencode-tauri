@@ -1,0 +1,61 @@
+@using Radzen
+@using Radzen.Blazor
+@using OpenCode.Models
+@using ChatMessage = OpenCode.Models.ChatMessage
+@using Opencode.Message
+@using Opencode.Message.Part
+
+<div class="message-bubble-wrapper @GetWrapperClass()"
+     role="article"
+     aria-label="@GetAriaLabel()">
+
+    <div class="message-bubble @GetBubbleClass()">
+        @* Message content - next slice *@
+        <div class="message-content">
+            <p class="message-text">@GetDisplayText()</p>
+        </div>
+
+        @* Metadata *@
+        <div class="message-meta">
+            <span class="meta-item">@(ChatMessage?.IsUser == true ? "You" : "Assistant")</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public ChatMessage? ChatMessage { get; set; }
+
+    [Parameter]
+    public EventCallback<ChatMessage> OnRetry { get; set; }
+
+    private string GetWrapperClass() =>
+        ChatMessage?.IsUser == true ? "user-message" : "assistant-message";
+
+    private string GetBubbleClass() =>
+        ChatMessage?.IsUser == true ? "bubble-user" : "bubble-assistant";
+
+    private string GetAriaLabel() =>
+        ChatMessage?.IsUser == true ? "Your message" : "Assistant response";
+
+    private string GetDisplayText()
+    {
+        // For user messages (optimistic), always use OriginalText
+        if (!string.IsNullOrEmpty(ChatMessage?.OriginalText) && ChatMessage?.Message?.Assistant == null)
+            return ChatMessage.OriginalText;
+
+        // For assistant messages, extract text from parts
+        var parts = ChatMessage?.Message?.Assistant?.Parts;
+        if (parts != null)
+        {
+            foreach (var part in parts)
+            {
+                if (part.Text != null)
+                    return part.Text.Text;
+            }
+        }
+
+        // Fallback to OriginalText (which is set from assistant.Text in FromAssistantMessage)
+        return ChatMessage?.OriginalText ?? "";
+    }
+}

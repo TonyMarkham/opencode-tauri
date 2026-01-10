@@ -144,6 +144,6 @@ pub fn detect_opencode_paths() -> Result<OpenCodePaths, AuthSyncError> {
 
     // No valid path could be determined
     Err(AuthSyncError::auth_path_detection(
-        "Cannot determine OpenCode data directory. Set OPENCODE_DATA_DIR environment variable."
+        "Cannot determine OpenCode data directory. Set OPENCODE_DATA_DIR environment variable.",
     ))
 }

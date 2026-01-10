@@ -26,6 +26,7 @@
       public const string UnexpectedError = "An unexpected error occurred. Please try again.";
       public const string ServerError = "Server error: {0}";
       public const string OfflineMode = "You appear to be offline. Messages will be sent when connection is restored.";
+      public const string SendTimeout = "Message send timed out. The server may be busy.";
 
       // Titles (for alert headers)
       public const string TitleConnectionError = "Connection Error";
@@ -41,6 +42,7 @@
       public const string A11yReconnected = "Connection restored";
       public const string A11yMessageSent = "Message sent";
       public const string A11yError = "Error: {0}";
+      public const string A11yResponseReceived = "Response received";
 
       // Placeholders
       public const string InputPlaceholder = "Type a message... (Ctrl+Enter to send)";

@@ -94,7 +94,10 @@ pub fn check_oauth_status(provider: &str) -> Result<OAuthStatus, AuthSyncError> 
         }
     };
 
-    debug!("Checking OAuth status in {:?} (source: {})", paths.auth_file, paths.source);
+    debug!(
+        "Checking OAuth status in {:?} (source: {})",
+        paths.auth_file, paths.source
+    );
 
     // Check if file exists
     if !paths.auth_file.exists() {
@@ -147,9 +150,16 @@ pub fn check_oauth_status(provider: &str) -> Result<OAuthStatus, AuthSyncError> 
         Ok(auth_info) => {
             let status = auth_info.to_oauth_status();
             if status == OAuthStatus::Configured {
-                info!("Provider '{}' has OAuth configured - will skip API key sync", provider);
+                info!(
+                    "Provider '{}' has OAuth configured - will skip API key sync",
+                    provider
+                );
             } else {
-                debug!("Provider '{}' has {} auth configured", provider, auth_info.auth_type());
+                debug!(
+                    "Provider '{}' has {} auth configured",
+                    provider,
+                    auth_info.auth_type()
+                );
             }
             Ok(status)
         }

@@ -1,0 +1,23 @@
+@using Radzen
+@using Radzen.Blazor
+
+<div class="typing-indicator-wrapper" role="status" aria-label="Assistant is thinking">
+    <div class="typing-indicator">
+        <div class="typing-avatar">
+            <RadzenIcon Icon="smart_toy" />
+        </div>
+        <div class="typing-content">
+            <div class="typing-dots" aria-hidden="true">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <span class="typing-text">@Text</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Text { get; set; } = "Thinking...";
+}

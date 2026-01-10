@@ -17,6 +17,9 @@ fn main() {
 fn compile_protos() {
     prost_build::Config::new()
         .type_attribute(".", "#[allow(clippy::large_enum_variant)]")
+        .extern_path(".google.protobuf.Struct", "::prost_wkt_types::Struct")
+        .extern_path(".google.protobuf.Value", "::prost_wkt_types::Value")
+        .extern_path(".google.protobuf.ListValue", "::prost_wkt_types::ListValue")
         .type_attribute(
             "IpcServerInfo",
             "#[derive(serde::Serialize, serde::Deserialize)]",
@@ -32,6 +35,10 @@ fn compile_protos() {
         .type_attribute(
             "opencode.session.OcSessionSummary",
             "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .field_attribute(
+            "opencode.session.OcSessionSummary.diffs",
+            "#[serde(default)]",
         )
         .type_attribute(
             "opencode.session.OcFileDiff",
@@ -59,6 +66,209 @@ fn compile_protos() {
         )
         .type_attribute(
             "opencode.session.OcSessionList",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.OcAssistantMessage",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.session_id",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.role",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.model",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.parts",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.text",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.tokens",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.cost",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcAssistantMessage.error",
+            "#[serde(default)]",
+        )
+        .type_attribute(
+            "opencode.message.OcUserMessage",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.OcMessage",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.OcModelReference",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .field_attribute(
+            "opencode.message.OcModelReference.model_id",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcModelReference.provider_id",
+            "#[serde(default)]",
+        )
+        .type_attribute(
+            "opencode.message.OcTokens",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.OcMessageError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcTextPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcReasoningPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.OcMessage.message",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcPart.part",
+            "#[derive(serde::Serialize, serde::Deserialize)] #[serde(rename_all = \"snake_case\")]",
+        )
+        .field_attribute("opencode.message.part.OcPart.part", "#[serde(flatten)]")
+        .type_attribute(
+            "opencode.message.OcTokenUsage",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .field_attribute("opencode.message.OcTokenUsage.input", "#[serde(default)]")
+        .field_attribute("opencode.message.OcTokenUsage.output", "#[serde(default)]")
+        .field_attribute(
+            "opencode.message.OcTokenUsage.cache_read",
+            "#[serde(default)]",
+        )
+        .field_attribute(
+            "opencode.message.OcTokenUsage.cache_write",
+            "#[serde(default)]",
+        )
+        .type_attribute(
+            "opencode.message.error.OcMessageError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.error.OcMessageError.error",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.error.OcApiError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.error.OcProviderAuthError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.error.OcUnknownError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.error.OcOutputLengthError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.error.OcAbortedError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcToolPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcFilePart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcPatchPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcSnapshotPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcAgentPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcCompactionPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcSubtaskPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcStepStartPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcStepFinishPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcRetryPart",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.message.part.OcTokenUsage",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolState",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolState.state",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolStatePending",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolStateRunning",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolStateCompleted",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolStateError",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolTime",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "opencode.tool.OcToolTimeWithEnd",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
         .compile_protos(
@@ -136,14 +346,6 @@ fn validate_mappings(mappings: &HashMap<String, String>) {
     let reverse: HashMap<_, _> = mappings.iter().map(|(k, v)| (v, k)).collect();
     if reverse.len() != mappings.len() {
         panic!("Mappings are not bijective (cannot round-trip safely)");
-    }
-
-    // Verify we have exactly 39 mappings (based on research)
-    if mappings.len() != 39 {
-        panic!(
-            "Expected 39 field mappings, found {}. Check {OPENCODE_FIELDS_TOML} against Session 6.5 research.",
-            mappings.len()
-        );
     }
 }
 

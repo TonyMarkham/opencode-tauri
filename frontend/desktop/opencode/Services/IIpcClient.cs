@@ -126,4 +126,26 @@ public interface IIpcClient : IAsyncDisposable
     Task<IpcAuthSyncResponse> SyncAuthKeysAsync(
         bool skipOAuthProviders = true,
         CancellationToken cancellationToken = default);
+    
+    // Message operations
+
+    /// <summary>
+    /// Sends a message to an AI session and receives the complete assistant response.
+    /// This is a blocking call - for streaming, use SSE subscription (future).
+    /// </summary>
+    /// <param name="sessionId">Session ID to send to.</param>
+    /// <param name="text">Message text content.</param>
+    /// <param name="modelId">Model ID (e.g., "claude-sonnet-4-20250514").</param>
+    /// <param name="providerId">Provider ID (e.g., "anthropic").</param>
+    /// <param name="agent">Optional agent name (default: "primary").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The assistant's response message.</returns>
+    Task<Opencode.Message.OcMessage> SendMessageAsync(
+        string sessionId,
+        string text,
+        string modelId,
+        string providerId,
+        string? agent = null,
+        CancellationToken cancellationToken = default);
+
 }

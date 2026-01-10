@@ -86,7 +86,10 @@ pub fn load_env_api_keys(config: &ModelsConfig) -> LoadedKeys {
     // Use provider config to know exactly which env vars to look for
     for provider in &config.providers {
         if provider.api_key_env.is_empty() {
-            debug!("Provider '{}' has no api_key_env configured, skipping", provider.name);
+            debug!(
+                "Provider '{}' has no api_key_env configured, skipping",
+                provider.name
+            );
             continue;
         }
 
@@ -98,27 +101,24 @@ pub fn load_env_api_keys(config: &ModelsConfig) -> LoadedKeys {
                 match validator.validate_and_wrap(value) {
                     Ok(redacted_key) => {
                         info!(
-                              "Found valid API key for provider: {} (from {}, {} chars)",
-                              provider.name,
-                              provider.api_key_env,
-                              redacted_key.len()
-                          );
+                            "Found valid API key for provider: {} (from {}, {} chars)",
+                            provider.name,
+                            provider.api_key_env,
+                            redacted_key.len()
+                        );
                         keys.insert(provider.name.clone(), redacted_key);
                     }
                     Err(e) => {
-                        warn!(
-                              "Invalid API key for provider '{}': {}",
-                              provider.name, e
-                          );
+                        warn!("Invalid API key for provider '{}': {}", provider.name, e);
                         validation_errors.insert(provider.name.clone(), e);
                     }
                 }
             }
             Err(env::VarError::NotPresent) => {
                 debug!(
-                      "No {} env var found for provider {}",
-                      provider.api_key_env, provider.name
-                  );
+                    "No {} env var found for provider {}",
+                    provider.api_key_env, provider.name
+                );
             }
             Err(env::VarError::NotUnicode(_)) => {
                 warn!("Env var {} contains invalid unicode", provider.api_key_env);
@@ -133,7 +133,10 @@ pub fn load_env_api_keys(config: &ModelsConfig) -> LoadedKeys {
         }
     }
 
-    LoadedKeys { keys, validation_errors }
+    LoadedKeys {
+        keys,
+        validation_errors,
+    }
 }
 
 /// Attempts to load .env from known locations.
@@ -141,7 +144,10 @@ fn try_load_dotenv() -> EnvLoadResult {
     // Try current directory first
     if let Ok(path) = dotenvy::dotenv() {
         info!("Loaded .env from: {:?}", path);
-        return EnvLoadResult { path: Some(path), loaded: true };
+        return EnvLoadResult {
+            path: Some(path),
+            loaded: true,
+        };
     }
 
     // Try executable directory
@@ -152,7 +158,10 @@ fn try_load_dotenv() -> EnvLoadResult {
                 match dotenvy::from_path(&env_path) {
                     Ok(_) => {
                         info!("Loaded .env from: {:?}", env_path);
-                        return EnvLoadResult { path: Some(env_path), loaded: true };
+                        return EnvLoadResult {
+                            path: Some(env_path),
+                            loaded: true,
+                        };
                     }
                     Err(e) => {
                         warn!("Failed to parse .env at {:?}: {}", env_path, e);
@@ -162,7 +171,10 @@ fn try_load_dotenv() -> EnvLoadResult {
         }
     }
 
-    EnvLoadResult { path: None, loaded: false }
+    EnvLoadResult {
+        path: None,
+        loaded: false,
+    }
 }
 
 /// Configuration for sync operation.

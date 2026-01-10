@@ -1,10 +1,10 @@
+pub mod auth_sync;
 pub mod config;
 pub mod discovery;
 pub mod error;
 pub mod field_normalizer;
 pub mod ipc;
 pub mod proto;
-pub mod auth_sync;
 
 pub use config::models::{ModelsConfig, ProviderConfig};
 

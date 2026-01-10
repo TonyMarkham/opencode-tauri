@@ -66,11 +66,9 @@ impl serde::Serialize for RedactedApiKey {
     where
         S: serde::Serializer,
     {
-        Err(S::Error::custom(
-            RedactError::Serialization {
-                message: String::from("RedactedApiKey cannot be serialized - use as_str() explicitly"),
-                location: ErrorLocation::from(Location::caller()),
-            }
-        ))
+        Err(S::Error::custom(RedactError::Serialization {
+            message: String::from("RedactedApiKey cannot be serialized - use as_str() explicitly"),
+            location: ErrorLocation::from(Location::caller()),
+        }))
     }
 }

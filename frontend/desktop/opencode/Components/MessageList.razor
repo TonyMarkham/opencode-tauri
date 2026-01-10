@@ -1,5 +1,7 @@
   @using Radzen
   @using Radzen.Blazor
+  @using OpenCode.Models
+  @using ChatMessage = OpenCode.Models.ChatMessage
 
   <div class="message-list"
        role="log"
@@ -22,13 +24,14 @@
       }
       else
       {
-          @* Virtualization placeholder - will use Virtualize in Session 14 *@
           <div class="messages-container">
               @foreach (var message in Messages)
               {
-                  <div class="message-placeholder" role="article" aria-label="Message">
-                      @* Message bubble implementation in Session 14 *@
-                  </div>
+                  <MessageBubble ChatMessage="message" OnRetry="OnRetry" />
+              }
+              @if (IsAwaitingResponse)
+              {
+                  <TypingIndicator />
               }
           </div>
       }
@@ -45,7 +48,15 @@
 
       /// <summary>List of messages to display.</summary>
       [Parameter]
-      public IReadOnlyList<object>? Messages { get; set; }
+      public IReadOnlyList<ChatMessage>? Messages { get; set; }
+      
+      /// <summary>Whether we're waiting for assistant response.</summary>
+      [Parameter]
+      public bool IsAwaitingResponse { get; set; }
+
+      /// <summary>Callback when user clicks retry on a failed message.</summary>
+      [Parameter]
+      public EventCallback<ChatMessage> OnRetry { get; set; }
 
       /// <summary>Announce a message for screen readers.</summary>
       public void Announce(string message)

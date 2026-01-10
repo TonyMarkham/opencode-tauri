@@ -31,15 +31,15 @@ use crate::ipc::connection_state::ConnectionState;
 use crate::ipc::handle::IpcServerHandle;
 use crate::ipc::state::{IpcState, StateCommand};
 use crate::proto::IpcErrorCode::{AuthError, InternalError, InvalidMessage, NotImplemented};
+use crate::proto::session::OcSessionList;
 use crate::proto::{
     IpcAuthHandshakeResponse, IpcAuthSyncResponse, IpcCheckHealthResponse, IpcClientMessage,
     IpcCreateSessionRequest, IpcDeleteSessionRequest, IpcDeleteSessionResponse,
     IpcDiscoverServerResponse, IpcErrorCode, IpcErrorResponse, IpcGetConfigResponse,
-    IpcProviderSyncResult, IpcServerMessage, IpcSpawnServerRequest, IpcSpawnServerResponse,
-    IpcStopServerResponse, IpcSyncAuthKeysRequest, IpcUpdateConfigRequest,
+    IpcProviderSyncResult, IpcSendMessageRequest, IpcServerMessage, IpcSpawnServerRequest,
+    IpcSpawnServerResponse, IpcStopServerResponse, IpcSyncAuthKeysRequest, IpcUpdateConfigRequest,
     IpcUpdateConfigResponse, ipc_client_message, ipc_server_message,
 };
-use crate::proto::session::OcSessionList;
 
 use common::ErrorLocation;
 
@@ -437,6 +437,9 @@ async fn handle_message(
         Payload::SyncAuthKeys(req) => {
             handle_sync_auth_keys(config_state, state, request_id, req, write).await
         }
+
+        // Message Operations
+        Payload::SendMessage(req) => handle_send_message(state, request_id, req, write).await,
 
         // Auth handshake should not appear after initial auth
         Payload::AuthHandshake(_) => {
@@ -855,7 +858,10 @@ async fn handle_sync_auth_keys(
     use crate::auth_sync::{load_env_api_keys, oauth::check_oauth_status};
     use std::time::Instant;
 
-    info!("Handling sync_auth_keys request (skip_oauth={})", req.skip_oauth_providers);
+    info!(
+        "Handling sync_auth_keys request (skip_oauth={})",
+        req.skip_oauth_providers
+    );
 
     let start = Instant::now();
 
@@ -873,7 +879,7 @@ async fn handle_sync_auth_keys(
                 InternalError,
                 "No OpenCode server connected",
             )
-                .await?;
+            .await?;
             return Ok(());
         }
     };
@@ -903,7 +909,10 @@ async fn handle_sync_auth_keys(
                 }
                 Ok(_) => {} // Not OAuth, proceed with sync
                 Err(e) => {
-                    warn!("Failed to check OAuth status for '{}': {}, proceeding with sync", provider, e);
+                    warn!(
+                        "Failed to check OAuth status for '{}': {}, proceeding with sync",
+                        provider, e
+                    );
                 }
             }
         }
@@ -952,13 +961,13 @@ async fn handle_sync_auth_keys(
     let duration_ms = start.elapsed().as_millis() as u64;
 
     info!(
-          "Auth sync completed in {}ms: {} synced, {} failed, {} skipped, {} invalid",
-          duration_ms,
-          synced.len(),
-          failed.len(),
-          skipped.len(),
-          validation_failed.len()
-      );
+        "Auth sync completed in {}ms: {} synced, {} failed, {} skipped, {} invalid",
+        duration_ms,
+        synced.len(),
+        failed.len(),
+        skipped.len(),
+        validation_failed.len()
+    );
 
     let response = IpcAuthSyncResponse {
         synced,
@@ -974,4 +983,85 @@ async fn handle_sync_auth_keys(
     };
 
     send_protobuf_response(write, &server_msg).await
+}
+
+/// Handle send_message request.
+///
+/// Forwards the message to OpenCode server and returns the assistant response.
+async fn handle_send_message(
+    state: &IpcState,
+    request_id: u64,
+    req: IpcSendMessageRequest,
+    write: &mut futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<TcpStream>,
+        Message,
+    >,
+) -> Result<(), IpcError> {
+    info!(
+        "Handling send_message: session={}, model={}/{}, text_len={}",
+        req.session_id,
+        req.provider_id,
+        req.model_id,
+        req.text.len()
+    );
+
+    // Validate required fields
+    if req.session_id.is_empty() {
+        return send_error_response(write, request_id, InvalidMessage, "session_id is required")
+            .await;
+    }
+    if req.text.is_empty() {
+        return send_error_response(write, request_id, InvalidMessage, "text is required").await;
+    }
+    if req.model_id.is_empty() || req.provider_id.is_empty() {
+        return send_error_response(
+            write,
+            request_id,
+            InvalidMessage,
+            "model_id and provider_id are required",
+        )
+        .await;
+    }
+
+    let client = match state.get_opencode_client().await {
+        Some(c) => c,
+        None => {
+            return send_error_response(
+                write,
+                request_id,
+                IpcErrorCode::ServerError,
+                "No OpenCode server connected. Please start the server first.",
+            )
+            .await;
+        }
+    };
+
+    match client
+        .send_message(
+            &req.session_id,
+            &req.text,
+            &req.model_id,
+            &req.provider_id,
+            req.agent.as_deref(),
+        )
+        .await
+    {
+        Ok(message) => {
+            let response = IpcServerMessage {
+                request_id,
+                payload: Some(ipc_server_message::Payload::SendMessageResponse(message)),
+            };
+            send_protobuf_response(write, &response).await
+        }
+        Err(e) => {
+            error!("send_message failed: {}", e);
+            send_error_response(
+                write,
+                request_id,
+                IpcErrorCode::ServerError,
+                &format!("Failed to send message: {e}"),
+            )
+            .await
+        }
+    }
 }

@@ -1,3 +1,5 @@
+using Opencode.Message;
+
 namespace OpenCode.Services;
 
 using Microsoft.Extensions.Logging;
@@ -37,7 +39,7 @@ public class IpcClient : IIpcClient, IDisposable
 
     // Disposal
     private int _disposed = 0;
-    
+
     // Shared JSON options for config deserialization (thread-safe, reusable)
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
@@ -732,7 +734,8 @@ public class IpcClient : IIpcClient, IDisposable
 
     // ========== Config Operations ==========
 
-    public async Task<(AppConfig App, ModelsConfig Models)> GetConfigAsync(CancellationToken cancellationToken = default)
+    public async Task<(AppConfig App, ModelsConfig Models)> GetConfigAsync(
+        CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
 
@@ -782,7 +785,7 @@ public class IpcClient : IIpcClient, IDisposable
             throw new IpcProtocolException("Config retrieval failed unexpectedly", ex);
         }
     }
-    
+
     // Helper method
     private void ThrowIfDisposed()
     {
@@ -791,7 +794,7 @@ public class IpcClient : IIpcClient, IDisposable
             throw new ObjectDisposedException(nameof(IpcClient));
         }
     }
-    
+
     public async Task<IpcAuthSyncResponse> SyncAuthKeysAsync(
         bool skipOAuthProviders = true,
         CancellationToken cancellationToken = default)
@@ -806,7 +809,7 @@ public class IpcClient : IIpcClient, IDisposable
             {
                 SyncAuthKeys = new IpcSyncAuthKeysRequest
                 {
-                    SkipOauthProviders = skipOAuthProviders,  // lowercase 'o'
+                    SkipOauthProviders = skipOAuthProviders, // lowercase 'o'
                     TimeoutSecs = 30
                 }
             };
@@ -839,4 +842,94 @@ public class IpcClient : IIpcClient, IDisposable
             throw new IpcProtocolException("Auth sync failed unexpectedly", ex);
         }
     }
+
+    /// <inheritdoc />
+    public async Task<OcMessage> SendMessageAsync(
+        string sessionId,
+        string text,
+        string modelId,
+        string providerId,
+        string? agent = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId, nameof(sessionId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(text, nameof(text));
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelId, nameof(modelId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerId, nameof(providerId));
+
+        ThrowIfDisposed();
+
+        _logger.LogDebug(
+            "Sending message to session {SessionId} with model {ProviderId}/{ModelId}, length={Length}",
+            sessionId, providerId, modelId, text.Length);
+
+        try
+        {
+            var request = new IpcClientMessage
+            {
+                SendMessage = new IpcSendMessageRequest
+                {
+                    SessionId = sessionId,
+                    Text = text,
+                    ModelId = modelId,
+                    ProviderId = providerId,
+                }
+            };
+            if (!string.IsNullOrEmpty(agent))
+            {
+                request.SendMessage.Agent = agent;
+            }
+
+            // AI responses can take 60+ seconds for complex queries
+            // Use 2-minute timeout, separate from caller's cancellation
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken, timeoutCts.Token);
+
+            var response = await SendRequestAsync(request, cancellationToken: linkedCts.Token);
+
+            if (response.Error != null)
+            {
+                _logger.LogError("Server returned error: {Code} - {Message}",
+                    response.Error.Code, response.Error.Message);
+                throw new IpcServerException(0, (Opencode.IpcErrorCode)response.Error.Code, response.Error.Message);
+            }
+
+            if (response.SendMessageResponse == null)
+            {
+                _logger.LogError("SendMessageResponse is null in response payload");
+                throw new IpcProtocolException("Invalid response: SendMessageResponse is null");
+            }
+
+            var assistant = response.SendMessageResponse.Assistant;
+            _logger.LogInformation(
+                "Message sent successfully: {Parts} parts, {InTokens}+{OutTokens} tokens, ${Cost:F4}",
+                assistant?.Parts.Count ?? 0,
+                assistant?.Tokens?.Input ?? 0,
+                assistant?.Tokens?.Output ?? 0,
+                assistant?.Cost ?? 0);
+
+            return response.SendMessageResponse;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("SendMessage cancelled by caller");
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("SendMessage timed out after 2 minutes");
+            throw new IpcTimeoutException(0, TimeSpan.FromMinutes(2), "SendMessage");
+        }
+        catch (IpcException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error in SendMessage");
+            throw new IpcProtocolException("Send message failed unexpectedly", ex);
+        }
+    }
+
 }

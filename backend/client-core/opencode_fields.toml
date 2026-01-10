@@ -60,3 +60,9 @@
 "includeThoughts" = "include_thoughts"
 "thinkingBudget" = "thinking_budget"
 "budgetTokens" = "budget_tokens"
+
+# ============================================
+# KEBAB-CASE TYPE DISCRIMINATORS (Part types)
+# ============================================
+"step-start" = "step_start"
+"step-finish" = "step_finish"

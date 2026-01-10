@@ -4,9 +4,12 @@
 @inject IChatMetrics Metrics
 @inject IChatOptions Options
 @inject IChatStateService StateService
+@inject IConfigService ConfigService
 @using OpenCode.Services
 @using OpenCode.Services.Exceptions
 @using Opencode.Session
+@using OpenCode.Models
+@using ChatMessage = OpenCode.Models.ChatMessage
 @using System.Diagnostics
 
 @using Opencode.Components
@@ -82,7 +85,10 @@
   {
       @* Message list *@
       <div class="message-list-container">
-          <MessageList @ref="_messageList" />
+          <MessageList @ref="_messageList" 
+                       Messages="_messages" 
+                       IsAwaitingResponse="_isAwaitingResponse"
+                       OnRetry="HandleRetryAsync" />
       </div>
 
       @* Input area *@
@@ -110,6 +116,8 @@
   private string? _error;
   private ErrorType _errorType = ErrorType.Unknown;
   private string _inputText = "";
+  private List<ChatMessage> _messages = new();
+  private bool _isAwaitingResponse;
   private bool _isReconnecting;
   private bool _isOffline;
   private int _reconnectAttempt;
@@ -192,6 +200,14 @@
               Logger.LogDebug("Connecting to IPC server");
               await IpcClient.ConnectAsync();
           }
+          
+          // Ensure OpenCode server is discovered/spawned
+          var serverInfo = await IpcClient.DiscoverServerAsync(_cts.Token);
+          if (serverInfo == null)
+          {
+              Logger.LogInformation("No existing server found, spawning new one");
+              await IpcClient.SpawnServerAsync(cancellationToken: _cts.Token);
+          }
 
           _session = await IpcClient.CreateSessionAsync(Options.DefaultSessionTitle, _cts.Token);
           stopwatch.Stop();
@@ -258,7 +274,7 @@
 
   private async Task HandleSendAsync()
   {
-      if (string.IsNullOrWhiteSpace(_inputText)) return;
+      if (string.IsNullOrWhiteSpace(_inputText) || _session == null) return;
 
       var sendCorrelationId = Metrics.GenerateCorrelationId();
 
@@ -266,26 +282,128 @@
       {
           ["CorrelationId"] = sendCorrelationId,
           ["Operation"] = "SendMessage",
-          ["SessionId"] = _session?.Id ?? "none"
+          ["SessionId"] = _session.Id
       });
 
       Logger.LogInformation("Send initiated with {Length} characters", _inputText.Length);
 
-      // Sanitize before "sending"
+      // Sanitize before sending
       var sanitizedText = ChatInputSanitizer.Sanitize(_inputText);
+      
+      // Get default model (format: "provider/model")
+      var defaultModel = ConfigService.ModelsConfig?.Models.DefaultModel ?? "anthropic/claude-sonnet-4-20250514";
+      var parts = defaultModel.Split('/', 2);
+      var providerId = parts[0];
+      var modelId = parts.Length > 1 ? parts[1] : defaultModel;
 
-      // Placeholder for Session 14 - just clear input for now
+      // Create optimistic user message
+      var userMessage = new ChatMessage(sanitizedText, modelId, providerId);
+      _messages.Add(userMessage);
+      _isAwaitingResponse = true;
+
+      // Clear input immediately (optimistic)
       _inputText = "";
       await _chatInput!.ClearAsync();
 
       Announce(ChatErrorMessages.A11yMessageSent);
       StateHasChanged();
+
+      try
+      {
+          var response = await IpcClient.SendMessageAsync(_session.Id, sanitizedText, modelId, providerId, null, _cts?.Token ?? default);
+
+          // Update user message as sent
+          userMessage.Status = MessageStatus.Sent;
+
+          // Add assistant response
+          var assistantMessage = ChatMessage.FromAssistantMessage(response);
+          _messages.Add(assistantMessage);
+          Announce(ChatErrorMessages.A11yResponseReceived);
+
+          Logger.LogInformation("Message sent and response received");
+      }
+      catch (OperationCanceledException)
+      {
+          Logger.LogDebug("Send cancelled");
+          userMessage.Status = MessageStatus.Failed;
+          userMessage.ErrorMessage = "Cancelled";
+      }
+      catch (IpcTimeoutException ex)
+      {
+          Logger.LogError(ex, "Send timed out");
+          userMessage.Status = MessageStatus.Failed;
+          userMessage.ErrorMessage = ChatErrorMessages.SendTimeout;
+      }
+      catch (IpcServerException ex)
+      {
+          Logger.LogError(ex, "Send failed: {Error}", ex.Message);
+          userMessage.Status = MessageStatus.Failed;
+          userMessage.ErrorMessage = ex.Message;
+      }
+      catch (Exception ex)
+      {
+          Logger.LogError(ex, "Unexpected send error");
+          userMessage.Status = MessageStatus.Failed;
+          userMessage.ErrorMessage = ChatErrorMessages.UnexpectedError;
+      }
+      finally
+      {
+          _isAwaitingResponse = false;
+          StateHasChanged();
+      }
   }
 
   private void HandleValidationFailed(string reason)
   {
       Metrics.RecordInputValidationFailed(reason, _correlationId);
       Logger.LogWarning("Input validation failed: {Reason}", reason);
+  }
+
+  private async Task HandleRetryAsync(ChatMessage message)
+  {
+      if (!message.CanRetry) return;
+
+      message.Attempts++;
+      message.Status = MessageStatus.Sending;
+      message.ErrorMessage = null;
+      StateHasChanged();
+      
+      var retryModelId = message.ModelId;
+      var retryProviderId = message.ProviderId;
+      if (string.IsNullOrEmpty(retryModelId) || string.IsNullOrEmpty(retryProviderId))
+      {
+          var defaultModel = ConfigService.ModelsConfig?.Models.DefaultModel ?? "anthropic/claude-sonnet-4-20250514";
+          var parts = defaultModel.Split('/', 2);
+          retryProviderId = parts[0];
+          retryModelId = parts.Length > 1 ? parts[1] : defaultModel;
+      }
+
+      try
+      {
+          var response = await IpcClient.SendMessageAsync(
+              _session!.Id,
+              message.OriginalText,
+              retryModelId,
+              retryProviderId,
+              null,
+              _cts?.Token ?? default);
+
+          message.Status = MessageStatus.Sent;
+
+          var assistantMessage = ChatMessage.FromAssistantMessage(response);
+          _messages.Add(assistantMessage);
+          Announce(ChatErrorMessages.A11yResponseReceived);
+      }
+      catch (Exception ex)
+      {
+          Logger.LogError(ex, "Retry failed");
+          message.Status = MessageStatus.Failed;
+          message.ErrorMessage = ex.Message;
+      }
+      finally
+      {
+          StateHasChanged();
+      }
   }
 
   private void OnConnectionStateChanged(object? sender, ConnectionStateChangedEventArgs e)

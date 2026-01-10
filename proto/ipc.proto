@@ -56,6 +56,9 @@ message IpcClientMessage {
     // Auth Sync (62-63) - uses 60s range for config/auth operations
     IpcSyncAuthKeysRequest sync_auth_keys = 62;
     IpcGetOAuthStatusRequest get_oauth_status = 63;
+
+    // Message Operations (70-79)
+    IpcSendMessageRequest send_message = 70;
   }
 }
 
@@ -94,6 +97,9 @@ message IpcServerMessage {
     // Auth Sync Status (62-63)
     IpcAuthSyncResponse auth_sync_response = 62;
     IpcOAuthStatusResponse oauth_status_response = 63;
+
+    // Message Operations (70-79)
+    opencode.message.OcMessage send_message_response = 70;
 
     // Errors (100+)
     IpcErrorResponse error = 100;
@@ -308,3 +314,17 @@ enum OAuthStatusType {
   OAUTH_STATUS_TYPE_WELL_KNOWN = 3;      // Well-known auth configured
   OAUTH_STATUS_TYPE_NOT_CONFIGURED = 4;  // No auth configured
 }
+
+// ============================================
+// MESSAGE OPERATIONS
+// ============================================
+
+// Send a message to an AI session (non-streaming)
+message IpcSendMessageRequest {
+  string session_id = 1;        // Session to send to (required)
+  string text = 2;              // Message text content (required)
+  string model_id = 3;          // Model ID e.g., "claude-3-5-sonnet-20241022" (required)
+  string provider_id = 4;       // Provider ID e.g., "anthropic" (required)
+  optional string agent = 5;    // Agent name (default: "primary")
+}
+

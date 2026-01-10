@@ -26,6 +26,9 @@ tauri-build = { version = "2.5.3", features = [] }
 prost = { version = "0.14.1" }
 prost-types = { version = "0.14.1" }
 prost-build = { version = "0.14.1" }
+prost-wkt = { version = "0.7.1" }
+prost-wkt-types = { version = "0.7.1" }
+prost-wkt-build = { version = "0.7.1" }
 tokio-tungstenite = { version = "0.28.0" }
 futures-util = { version = "0.3.31" }
 uuid = { version = "1.19.0", features = ["v4"] }

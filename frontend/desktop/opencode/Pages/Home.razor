@@ -179,6 +179,14 @@
             if (!IpcClient.IsConnected)
             {
                 await IpcClient.ConnectAsync();
+    
+                // Ensure OpenCode server is discovered/spawned  
+                var serverInfo = await IpcClient.DiscoverServerAsync(_loadCts.Token);
+                if (serverInfo == null)
+                {
+                    Logger.LogInformation("No existing server found, spawning new one");
+                    await IpcClient.SpawnServerAsync(cancellationToken: _loadCts.Token);
+                }
             }
 
             var result = await IpcClient.ListSessionsAsync(_loadCts.Token);

@@ -7,7 +7,7 @@
 //! - Connection state checks
 
 use client_core::config::{AppConfig, ModelsConfig};
-use client_core::ipc::{ConfigState, start_ipc_server, IpcServerHandle};
+use client_core::ipc::{ConfigState, IpcServerHandle, start_ipc_server};
 use client_core::proto::{
     IpcAuthHandshake, IpcAuthHandshakeResponse, IpcClientMessage, IpcServerMessage,
     ipc_client_message, ipc_server_message,
