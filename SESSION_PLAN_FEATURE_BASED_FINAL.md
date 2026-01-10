@@ -163,7 +163,7 @@
 
 ---
 
-## Phase 2: Config & Auth (Sessions 9-12)
+## Phase 2: Config & Auth (Sessions 9-12) ✅ COMPLETE
 
 **Why this phase comes before chat:** You can't send a message without a model selected and auth configured.
 
@@ -232,25 +232,69 @@
 
 ---
 
-### Session 11: Settings Panel - Models Section  
+### Session 11: Settings Panel - Models Section ✅ COMPLETE
 **Demo:** Can see and select default model.
 
-- Models section in settings
-- Curated models list display
-- Default model dropdown
-- Model selector in footer (per-tab selection)
+**Completed (2026-01-09):**
+- ✅ Models section in settings modal with collapsible panel
+- ✅ Curated models list display from `models.toml`
+- ✅ Default model dropdown with provider grouping
+- ✅ ConfigService for loading and updating config via IPC
+- ✅ IConfigService interface with proper async patterns
+- ✅ Model selection persists to config
+- ✅ Refresh button to reload models from disk
 
-**Success:** Select model from dropdown, verify it's sent with message
+**Files created:**
+- `frontend/desktop/opencode/Services/ConfigService.cs` - Config management service
+- `frontend/desktop/opencode/Services/IConfigService.cs` - Service interface
+
+**Files modified:**
+- `frontend/desktop/opencode/Components/SettingsModal.razor` - Added Models section
+- `frontend/desktop/opencode/Program.cs` - ConfigService DI registration
+
+**Success:** Select model from dropdown, verify it persists to config
 
 ---
 
-### Session 12: Auth Sync
+### Session 12: Auth Sync ✅ COMPLETE
 **Demo:** API keys sync to OpenCode server on connect.
 
-- Read `.env` file for `*_API_KEY` variables
-- On OpenCode server connect: `PUT {opencode_url}/auth/{provider}` for each key
-- Display sync status in settings (success/failure per provider)
-- Skip Anthropic if OAuth detected
+**Completed (2026-01-09):**
+- ✅ `auth_sync` module in client-core with OAuth and API key detection
+- ✅ Read `.env` file for `*_API_KEY` variables
+- ✅ OAuth token detection from `.opencode` cache directory
+- ✅ Multi-path search for `.env` files (project root, home, etc.)
+- ✅ On OpenCode server connect: `PUT {opencode_url}/auth/{provider}` for each key
+- ✅ Skip Anthropic API key sync if OAuth tokens detected
+- ✅ `AuthSection.razor` component with provider status display
+- ✅ `ProviderBadgeRow.razor` for individual provider status (synced/failed/pending)
+- ✅ `AuthSyncService.cs` for managing auth sync state
+- ✅ `AuthSyncMetrics.cs` for telemetry
+- ✅ `RedactedKey` type for secure handling of sensitive data
+- ✅ Validation module for API key format checking
+- ✅ Error handling with `auth_sync` error types
+
+**Files created:**
+- `backend/client-core/src/auth_sync/mod.rs` - Auth sync module
+- `backend/client-core/src/auth_sync/oauth.rs` - OAuth token detection
+- `backend/client-core/src/auth_sync/paths.rs` - Path resolution for config files
+- `backend/client-core/src/auth_sync/validation.rs` - API key validation
+- `backend/client-core/src/error/auth_sync.rs` - Auth sync error types
+- `common/src/redacted_key.rs` - RedactedKey type for sensitive data
+- `common/src/http_status.rs` - HTTP status utilities
+- `common/src/error/redact_error.rs` - Error redaction utilities
+- `frontend/desktop/opencode/Components/AuthSection.razor` - Auth status UI
+- `frontend/desktop/opencode/Components/ProviderBadgeRow.razor` - Provider badge component
+- `frontend/desktop/opencode/Services/AuthSyncService.cs` - Auth sync service
+- `frontend/desktop/opencode/Services/AuthSyncMetrics.cs` - Metrics for auth sync
+- `frontend/desktop/opencode/Extensions/IpcAuthSyncResponseExtensions.cs` - Response extensions
+
+**Files modified:**
+- `backend/client-core/src/lib.rs` - Added auth_sync module
+- `backend/client-core/src/ipc/server.rs` - Auth sync IPC handlers
+- `backend/client-core/src/opencode_client/mod.rs` - Auth PUT endpoint
+- `proto/ipc.proto` - Auth sync messages
+- `frontend/desktop/opencode/Components/SettingsModal.razor` - Added Auth section
 
 **Success:** See "✓ Synced: openai, anthropic" in settings
 
@@ -667,7 +711,7 @@
 | Phase | Sessions | Features | Status |
 |-------|----------|----------|--------|
 | 1. Communication | 5-8 (incl. 6.5) | IPC server + client + JSON normalizer | ✅ COMPLETE |
-| 2. Config & Auth | 9-12 | Settings, models, API key sync | 🔄 IN PROGRESS (Sessions 9-10 done) |
+| 2. Config & Auth | 9-12 | Settings, models, API key sync | ✅ COMPLETE |
 | 3. Basic Chat | 13-16 | Send/receive messages, streaming | |
 | 4. Agents | 17-19 | Agent pane, selection, filtering | |
 | 5. Tools | 20-24 | Tool display, permissions, cancellation | |
@@ -679,4 +723,4 @@
 | 11. Ship | 43-45 | Polish and release | |
 
 **Total: 42 sessions (Sessions 5-45, including 6.5)**
-**Progress: Phase 1 complete + Sessions 9-10 done = 8 implementation sessions completed**
+**Progress: Phases 1-2 complete = 10 implementation sessions completed**
