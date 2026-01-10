@@ -1,0 +1,52 @@
+.message-list {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    padding: 2rem;
+    color: var(--rz-text-disabled-color);
+}
+
+.empty-state :deep(.rzi) {
+    color: var(--rz-text-disabled-color);
+    margin-bottom: 1rem;
+}
+
+.empty-state :deep(.rz-text) {
+    color: var(--rz-text-secondary-color);
+}
+
+.messages-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+}
+
+.message-placeholder {
+    padding: 0.5rem;
+    border-radius: 8px;
+    background: var(--rz-base-background-color);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

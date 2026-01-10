@@ -1,0 +1,72 @@
+.chat-input-wrapper {
+    width: 100%;
+}
+
+.input-container {
+    flex: 1;
+    position: relative;
+}
+
+.input-container :deep(textarea) {
+    width: 100%;
+    resize: none;
+    padding-bottom: 1.5rem; /* Space for char count */
+}
+
+.char-count {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--rz-text-disabled-color);
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.char-count.near-limit {
+    color: var(--rz-warning);
+}
+
+.char-count.over-limit {
+    color: var(--rz-danger);
+    font-weight: 600;
+}
+
+.input-status {
+    min-height: 1.5rem;
+    margin-top: 0.25rem;
+}
+
+.validation-error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--rz-danger);
+    background: var(--rz-danger-lighter);
+    border-radius: 4px;
+}
+
+.sanitization-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--rz-warning-darker);
+    background: var(--rz-warning-lighter);
+    border-radius: 4px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

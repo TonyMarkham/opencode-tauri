@@ -46,4 +46,21 @@ builder.Services.AddSingleton<IConfigService, ConfigService>();
 builder.Services.AddSingleton<IAuthSyncMetrics, AuthSyncMetrics>();
 builder.Services.AddSingleton<IAuthSyncService, AuthSyncService>();
 
+// Add metrics infrastructure
+builder.Services.AddMetrics();
+
+// Chat Configuration
+builder.Services.AddSingleton<IChatOptions>(sp =>
+{
+    var options = new ChatOptions();
+    // Could load from configuration here in the future:
+    // builder.Configuration.GetSection(ChatOptions.SectionName).Bind(options);
+    options.Validate();
+    return options;
+});
+
+// Chat Services
+builder.Services.AddSingleton<IChatMetrics, ChatMetrics>();
+builder.Services.AddScoped<IChatStateService, ChatStateService>();
+
 await builder.Build().RunAsync();

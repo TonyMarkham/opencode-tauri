@@ -1,0 +1,74 @@
+  @using Radzen
+  @using Radzen.Blazor
+
+  <div class="message-list"
+       role="log"
+       aria-label="Chat messages"
+       aria-live="polite"
+       aria-relevant="additions"
+       @ref="_containerRef">
+
+      @if (Messages == null || Messages.Count == 0)
+      {
+          <div class="empty-state" role="status">
+              <RadzenIcon Icon="chat_bubble_outline" Style="font-size: 4rem;" />
+              <RadzenText TextStyle="TextStyle.H6">
+                  @ChatErrorMessages.EmptyStateTitle
+              </RadzenText>
+              <RadzenText TextStyle="TextStyle.Body2">
+                  @ChatErrorMessages.EmptyStateSubtitle
+              </RadzenText>
+          </div>
+      }
+      else
+      {
+          @* Virtualization placeholder - will use Virtualize in Session 14 *@
+          <div class="messages-container">
+              @foreach (var message in Messages)
+              {
+                  <div class="message-placeholder" role="article" aria-label="Message">
+                      @* Message bubble implementation in Session 14 *@
+                  </div>
+              }
+          </div>
+      }
+  </div>
+
+  @* Screen reader announcements *@
+  <div class="visually-hidden" aria-live="assertive" aria-atomic="true">
+      @_announcement
+  </div>
+
+  @code {
+      private ElementReference _containerRef;
+      private string _announcement = "";
+
+      /// <summary>List of messages to display.</summary>
+      [Parameter]
+      public IReadOnlyList<object>? Messages { get; set; }
+
+      /// <summary>Announce a message for screen readers.</summary>
+      public void Announce(string message)
+      {
+          _announcement = message;
+          StateHasChanged();
+
+          // Clear after announcement
+          Task.Delay(1000).ContinueWith(_ =>
+          {
+              InvokeAsync(() =>
+              {
+                  _announcement = "";
+                  StateHasChanged();
+              });
+          });
+      }
+
+      /// <summary>Scroll to the bottom of the message list.</summary>
+      public async Task ScrollToBottomAsync()
+      {
+          // Will be implemented with JS interop in Session 14
+          await Task.CompletedTask;
+      }
+
+  }

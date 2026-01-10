@@ -1,0 +1,516 @@
+@page "/chat"
+@inject IIpcClient IpcClient
+@inject ILogger<Chat> Logger
+@inject IChatMetrics Metrics
+@inject IChatOptions Options
+@inject IChatStateService StateService
+@using OpenCode.Services
+@using OpenCode.Services.Exceptions
+@using Opencode.Session
+@using System.Diagnostics
+
+@using Opencode.Components
+@implements IDisposable
+
+<PageTitle>OpenCode - Chat</PageTitle>
+
+<div class="chat-container">
+  @* Session header *@
+  @if (_session != null)
+  {
+      <header class="session-header" role="banner">
+          <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+              <RadzenIcon Icon="chat" />
+              <RadzenText TextStyle="TextStyle.Caption">
+                  Session: @_session.Id
+              </RadzenText>
+              @if (_isOffline)
+              {
+                  <RadzenBadge BadgeStyle="BadgeStyle.Warning" Text="Offline" />
+              }
+          </RadzenStack>
+      </header>
+  }
+
+  @* Reconnecting banner *@
+  @if (_isReconnecting)
+  {
+      <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" AllowClose="false"
+                   Style="margin: 0.5rem; border-radius: 4px;">
+          <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+              <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate"
+                                         Size="ProgressBarCircularSize.ExtraSmall" />
+              <span>@ChatErrorMessages.Format(ChatErrorMessages.Reconnecting, _reconnectAttempt, Options.MaxReconnectAttempts)</span>
+          </RadzenStack>
+      </RadzenAlert>
+  }
+
+  @* Error display *@
+  @if (_error != null)
+  {
+      <RadzenAlert AlertStyle="@GetAlertStyle(_errorType)" Variant="Variant.Flat" Shade="Shade.Lighter"
+                   AllowClose="true" Close="@ClearError" Style="margin: 0.5rem;">
+          <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem">
+              <RadzenIcon Icon="@GetErrorIcon(_errorType)" />
+              <RadzenStack Gap="0.25rem" Style="flex: 1">
+                  <RadzenText TextStyle="TextStyle.Body1" Style="font-weight: 600; margin: 0;">
+                      @GetErrorTitle(_errorType)
+                  </RadzenText>
+                  <RadzenText TextStyle="TextStyle.Body2" Style="margin: 0;">@_error</RadzenText>
+              </RadzenStack>
+              @if (CanRetry)
+              {
+                  <RadzenButton Text="Retry" Click="RetryAsync"
+                                ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                Disabled="@_isRetryDisabled" />
+              }
+          </RadzenStack>
+      </RadzenAlert>
+  }
+
+  @* Loading state *@
+  @if (_loading)
+  {
+      <div class="loading-container" role="status" aria-busy="true">
+          <RadzenStack AlignItems="AlignItems.Center" Gap="1rem">
+              <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+              <RadzenText TextStyle="TextStyle.Body1">Creating session...</RadzenText>
+          </RadzenStack>
+      </div>
+  }
+  else
+  {
+      @* Message list *@
+      <div class="message-list-container">
+          <MessageList @ref="_messageList" />
+      </div>
+
+      @* Input area *@
+      <div class="chat-input-container">
+          <ChatInput @ref="_chatInput"
+                     @bind-Value="_inputText"
+                     SessionId="@_session?.Id"
+                     OnSend="HandleSendAsync"
+                     OnValidationFailed="HandleValidationFailed"
+                     Disabled="@IsInputDisabled" />
+      </div>
+  }
+</div>
+
+@* Accessibility announcements *@
+<div class="visually-hidden" aria-live="assertive" role="status">
+  @_a11yAnnouncement
+</div>
+
+@code {
+
+  // State
+  private OcSessionInfo? _session;
+  private bool _loading = true;
+  private string? _error;
+  private ErrorType _errorType = ErrorType.Unknown;
+  private string _inputText = "";
+  private bool _isReconnecting;
+  private bool _isOffline;
+  private int _reconnectAttempt;
+  private DateTime _lastReconnectSequence = DateTime.MinValue;
+  private string _a11yAnnouncement = "";
+  private string _correlationId = "";
+
+  // Circuit breaker state
+  private bool _isRetryDisabled;
+  private DateTime _retryEnabledAt = DateTime.MinValue;
+
+  // References
+  private ChatInput? _chatInput;
+  private MessageList? _messageList;
+  private CancellationTokenSource? _cts;
+  private CancellationTokenSource? _reconnectCts;
+  private Stopwatch? _reconnectStopwatch;
+
+  private enum ErrorType
+  {
+      Unknown,
+      Connection,
+      Authentication,
+      Timeout,
+      Server,
+      Validation,
+      Offline
+  }
+
+  private bool CanRetry => _errorType is ErrorType.Connection or ErrorType.Timeout or ErrorType.Offline;
+  private bool IsInputDisabled => _session == null || _isReconnecting || _isOffline;
+
+  protected override async Task OnInitializedAsync()
+  {
+      _correlationId = Metrics.GenerateCorrelationId();
+
+      IpcClient.ConnectionStateChanged += OnConnectionStateChanged;
+      await CreateSessionAsync();
+  }
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+      // Focus input after session is created (only once)
+      if (_session != null && !_loading && _chatInput != null)
+      {
+          try
+          {
+              await _chatInput.FocusAsync();
+          }
+          catch
+          {
+              // Ignore focus failures
+          }
+      }
+  }
+
+  private async Task CreateSessionAsync()
+  {
+      _cts?.Cancel();
+      _cts = new CancellationTokenSource();
+      _loading = true;
+      _error = null;
+      StateHasChanged();
+
+      var stopwatch = Stopwatch.StartNew();
+      var opCorrelationId = Metrics.GenerateCorrelationId();
+
+      using var logScope = Logger.BeginScope(new Dictionary<string, object>
+      {
+          ["CorrelationId"] = opCorrelationId,
+          ["Operation"] = "CreateSession"
+      });
+
+      try
+      {
+          Logger.LogInformation("Creating chat session");
+
+          if (!IpcClient.IsConnected)
+          {
+              Logger.LogDebug("Connecting to IPC server");
+              await IpcClient.ConnectAsync();
+          }
+
+          _session = await IpcClient.CreateSessionAsync(Options.DefaultSessionTitle, _cts.Token);
+          stopwatch.Stop();
+
+          // Record metrics
+          Metrics.RecordSessionCreated(_session.Id, opCorrelationId);
+          Metrics.RecordSessionCreationDuration(stopwatch.Elapsed, opCorrelationId);
+
+          // Save session ID for recovery
+          await StateService.SaveLastSessionIdAsync(_session.Id);
+
+          Logger.LogInformation("Created session {SessionId} in {Duration}ms",
+              _session.Id, stopwatch.ElapsedMilliseconds);
+
+          // Announce for accessibility
+          Announce(ChatErrorMessages.A11ySessionCreated);
+      }
+      catch (OperationCanceledException)
+      {
+          Logger.LogDebug("Session creation cancelled");
+      }
+      catch (IpcConnectionException ex)
+      {
+          HandleSessionError(ErrorType.Connection, ChatErrorMessages.ConnectionFailed,
+              "connection", opCorrelationId, ex);
+      }
+      catch (IpcAuthenticationException ex)
+      {
+          HandleSessionError(ErrorType.Authentication, ex.Message,
+              "authentication", opCorrelationId, ex);
+      }
+      catch (IpcTimeoutException ex)
+      {
+          HandleSessionError(ErrorType.Timeout, ChatErrorMessages.SessionCreationTimeout,
+              "timeout", opCorrelationId, ex);
+      }
+      catch (IpcServerException ex)
+      {
+          HandleSessionError(ErrorType.Server,
+              ChatErrorMessages.Format(ChatErrorMessages.ServerError, ex.Message),
+              "server", opCorrelationId, ex);
+      }
+      catch (Exception ex)
+      {
+          HandleSessionError(ErrorType.Unknown, ChatErrorMessages.UnexpectedError,
+              "unknown", opCorrelationId, ex);
+      }
+      finally
+      {
+          _loading = false;
+          StateHasChanged();
+      }
+  }
+
+  private void HandleSessionError(ErrorType type, string message, string metricType,
+      string correlationId, Exception ex)
+  {
+      _errorType = type;
+      _error = message;
+      Metrics.RecordSessionCreationFailed(metricType, correlationId);
+      Logger.LogError(ex, "Session creation failed: {ErrorType}", metricType);
+      Announce(ChatErrorMessages.Format(ChatErrorMessages.A11yError, message));
+  }
+
+  private async Task HandleSendAsync()
+  {
+      if (string.IsNullOrWhiteSpace(_inputText)) return;
+
+      var sendCorrelationId = Metrics.GenerateCorrelationId();
+
+      using var logScope = Logger.BeginScope(new Dictionary<string, object>
+      {
+          ["CorrelationId"] = sendCorrelationId,
+          ["Operation"] = "SendMessage",
+          ["SessionId"] = _session?.Id ?? "none"
+      });
+
+      Logger.LogInformation("Send initiated with {Length} characters", _inputText.Length);
+
+      // Sanitize before "sending"
+      var sanitizedText = ChatInputSanitizer.Sanitize(_inputText);
+
+      // Placeholder for Session 14 - just clear input for now
+      _inputText = "";
+      await _chatInput!.ClearAsync();
+
+      Announce(ChatErrorMessages.A11yMessageSent);
+      StateHasChanged();
+  }
+
+  private void HandleValidationFailed(string reason)
+  {
+      Metrics.RecordInputValidationFailed(reason, _correlationId);
+      Logger.LogWarning("Input validation failed: {Reason}", reason);
+  }
+
+  private void OnConnectionStateChanged(object? sender, ConnectionStateChangedEventArgs e)
+  {
+      InvokeAsync(async () =>
+      {
+          Logger.LogInformation("Connection state changed: {OldState} -> {NewState}",
+              e.OldState, e.NewState);
+
+          if (e.NewState == ConnectionState.Failed || e.NewState == ConnectionState.Disconnected)
+          {
+              _isOffline = true;
+              await TryReconnectAsync();
+          }
+          else if (e.NewState == ConnectionState.Connected)
+          {
+              await HandleReconnectedAsync();
+          }
+
+          StateHasChanged();
+      });
+  }
+
+  private async Task TryReconnectAsync()
+  {
+      // Circuit breaker: prevent rapid reconnection attempts
+      var timeSinceLastSequence = DateTime.UtcNow - _lastReconnectSequence;
+      if (timeSinceLastSequence < Options.ReconnectCooldown && _lastReconnectSequence != DateTime.MinValue)
+      {
+          Logger.LogWarning("Reconnection blocked by circuit breaker. Cooldown: {Remaining}s",
+              (Options.ReconnectCooldown - timeSinceLastSequence).TotalSeconds);
+          Metrics.RecordReconnectionCircuitBroken(_correlationId);
+
+          _error = ChatErrorMessages.ReconnectionCooldown;
+          _errorType = ErrorType.Connection;
+          _isRetryDisabled = true;
+          _retryEnabledAt = _lastReconnectSequence + Options.ReconnectCooldown;
+
+          // Enable retry button after cooldown
+          _ = EnableRetryAfterCooldownAsync();
+          return;
+      }
+
+      if (_isReconnecting) return;
+
+      _reconnectCts?.Cancel();
+      _reconnectCts = new CancellationTokenSource();
+      _isReconnecting = true;
+      _reconnectAttempt = 0;
+      _error = null;
+      _lastReconnectSequence = DateTime.UtcNow;
+      _reconnectStopwatch = Stopwatch.StartNew();
+
+      var reconnectCorrelationId = Metrics.GenerateCorrelationId();
+
+      using var logScope = Logger.BeginScope(new Dictionary<string, object>
+      {
+          ["CorrelationId"] = reconnectCorrelationId,
+          ["Operation"] = "Reconnect"
+      });
+
+      Announce(ChatErrorMessages.A11yReconnecting);
+      StateHasChanged();
+
+      var delay = Options.InitialReconnectDelay;
+
+      while (_reconnectAttempt < Options.MaxReconnectAttempts &&
+             !_reconnectCts.Token.IsCancellationRequested)
+      {
+          _reconnectAttempt++;
+          Metrics.RecordReconnectionAttempt(_reconnectAttempt, reconnectCorrelationId);
+
+          Logger.LogInformation("Reconnection attempt {Attempt} of {Max}",
+              _reconnectAttempt, Options.MaxReconnectAttempts);
+          StateHasChanged();
+
+          try
+          {
+              await Task.Delay(delay, _reconnectCts.Token);
+              await IpcClient.ConnectAsync();
+              return; // Success - OnConnectionStateChanged handles the rest
+          }
+          catch (OperationCanceledException)
+          {
+              Logger.LogDebug("Reconnection cancelled");
+              break;
+          }
+          catch (Exception ex)
+          {
+              Logger.LogWarning(ex, "Reconnection attempt {Attempt} failed", _reconnectAttempt);
+
+              // Exponential backoff with cap
+              delay = TimeSpan.FromMilliseconds(
+                  Math.Min(delay.TotalMilliseconds * 2, Options.MaxReconnectDelay.TotalMilliseconds));
+          }
+      }
+
+      // All attempts failed
+      _reconnectStopwatch?.Stop();
+      _isReconnecting = false;
+      _errorType = ErrorType.Connection;
+      _error = ChatErrorMessages.Format(ChatErrorMessages.ReconnectionFailed, Options.MaxReconnectAttempts);
+
+      Metrics.RecordReconnectionFailed(_reconnectAttempt, reconnectCorrelationId);
+      Logger.LogError("Reconnection failed after {Attempts} attempts", _reconnectAttempt);
+
+      StateHasChanged();
+  }
+
+  private async Task HandleReconnectedAsync()
+  {
+      if (!_isReconnecting && !_isOffline) return;
+
+      var totalDuration = _reconnectStopwatch?.Elapsed ?? TimeSpan.Zero;
+      _reconnectStopwatch?.Stop();
+
+      _isReconnecting = false;
+      _isOffline = false;
+
+      Metrics.RecordReconnectionSuccess(_reconnectAttempt, totalDuration, _correlationId);
+      Logger.LogInformation("Reconnected successfully after {Attempts} attempts in {Duration}ms",
+          _reconnectAttempt, totalDuration.TotalMilliseconds);
+
+      _reconnectAttempt = 0;
+      _error = null;
+
+      Announce(ChatErrorMessages.A11yReconnected);
+
+      // Recreate session if lost
+      if (_session == null)
+      {
+          await CreateSessionAsync();
+      }
+  }
+
+  private async Task EnableRetryAfterCooldownAsync()
+  {
+      var delay = _retryEnabledAt - DateTime.UtcNow;
+      if (delay > TimeSpan.Zero)
+      {
+          await Task.Delay(delay);
+      }
+
+      _isRetryDisabled = false;
+      await InvokeAsync(StateHasChanged);
+  }
+
+  private async Task RetryAsync()
+  {
+      _error = null;
+      _isRetryDisabled = false;
+
+      if (_session == null)
+      {
+          await CreateSessionAsync();
+      }
+      else
+      {
+          _lastReconnectSequence = DateTime.MinValue; // Reset circuit breaker for manual retry
+          await TryReconnectAsync();
+      }
+  }
+
+  private void ClearError()
+  {
+      _error = null;
+      StateHasChanged();
+  }
+
+  private void Announce(string message)
+  {
+      _a11yAnnouncement = message;
+      StateHasChanged();
+
+      // Clear announcement after it's been read
+      Task.Delay(1000).ContinueWith(_ =>
+      {
+          InvokeAsync(() =>
+          {
+              _a11yAnnouncement = "";
+              StateHasChanged();
+          });
+      });
+  }
+
+  private AlertStyle GetAlertStyle(ErrorType errorType) => errorType switch
+  {
+      ErrorType.Authentication => AlertStyle.Warning,
+      ErrorType.Connection => AlertStyle.Danger,
+      ErrorType.Timeout => AlertStyle.Warning,
+      ErrorType.Server => AlertStyle.Danger,
+      ErrorType.Validation => AlertStyle.Warning,
+      ErrorType.Offline => AlertStyle.Info,
+      _ => AlertStyle.Info
+  };
+
+  private string GetErrorIcon(ErrorType errorType) => errorType switch
+  {
+      ErrorType.Authentication => "lock",
+      ErrorType.Connection => "signal_wifi_off",
+      ErrorType.Timeout => "schedule",
+      ErrorType.Server => "error",
+      ErrorType.Validation => "warning",
+      ErrorType.Offline => "cloud_off",
+      _ => "info"
+  };
+
+  private string GetErrorTitle(ErrorType errorType) => errorType switch
+  {
+      ErrorType.Authentication => ChatErrorMessages.TitleSessionError,
+      ErrorType.Connection => ChatErrorMessages.TitleConnectionError,
+      ErrorType.Timeout => ChatErrorMessages.TitleTimeout,
+      ErrorType.Server => ChatErrorMessages.TitleServerError,
+      ErrorType.Validation => ChatErrorMessages.TitleValidationError,
+      ErrorType.Offline => ChatErrorMessages.TitleOffline,
+      _ => "Error"
+  };
+
+  public void Dispose()
+  {
+      IpcClient.ConnectionStateChanged -= OnConnectionStateChanged;
+      _cts?.Cancel();
+      _cts?.Dispose();
+      _reconnectCts?.Cancel();
+      _reconnectCts?.Dispose();
+  }
+
+}

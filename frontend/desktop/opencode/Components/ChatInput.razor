@@ -1,0 +1,247 @@
+  @using Radzen
+  @using Radzen.Blazor
+  @using Microsoft.AspNetCore.Components.Web
+  @using System.Timers
+  @inject IJSRuntime JS
+  @inject IChatOptions Options
+  @inject IChatMetrics Metrics
+  @inject IChatStateService StateService
+  @implements IDisposable
+
+  <div class="chat-input-wrapper" @onkeydown="HandleKeyDown" @onkeyup="HandleKeyUp">
+      <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.End">
+          <div class="input-container">
+              <RadzenTextArea
+                  @ref="_textAreaRef"
+                  Value="@Value"
+                  ValueChanged="HandleValueChanged"
+                  Placeholder="@ChatErrorMessages.InputPlaceholder"
+                  Rows="2"
+                  MaxLength="@Options.MaxMessageLength"
+                  Disabled="@Disabled"
+                  aria-label="Chat message input"
+                  aria-describedby="input-status"
+                  aria-invalid="@(!string.IsNullOrEmpty(ValidationError))" />
+              <div class="char-count @(IsNearLimit ? "near-limit" : "") @(IsOverLimit ? "over-limit" : "")"
+                   aria-live="polite" aria-atomic="true">
+                  <span class="visually-hidden">Character count:</span>
+                  @CharacterCount / @Options.MaxMessageLength
+              </div>
+          </div>
+          <RadzenButton
+              Icon="send"
+              ButtonStyle="ButtonStyle.Primary"
+              Click="@HandleSendClick"
+              Disabled="@IsSendDisabled"
+              aria-label="Send message (Ctrl+Enter)"
+              title="Send message (Ctrl+Enter)" />
+      </RadzenStack>
+
+      @* Status area for validation and accessibility *@
+      <div id="input-status" class="input-status" role="status" aria-live="polite">
+          @if (!string.IsNullOrEmpty(ValidationError))
+          {
+              <div class="validation-error" role="alert">
+                  <RadzenIcon Icon="error_outline" />
+                  <span>@ValidationError</span>
+              </div>
+          }
+          else if (_sanitizationApplied)
+          {
+              <div class="sanitization-notice">
+                  <RadzenIcon Icon="info_outline" />
+                  <span>@ChatErrorMessages.InputContainsDangerousContent</span>
+              </div>
+          }
+      </div>
+  </div>
+
+  @code {
+      private RadzenTextArea? _textAreaRef;
+      private Timer? _debounceTimer;
+      private Timer? _draftSaveTimer;
+      private string _pendingValue = "";
+      private bool _sanitizationApplied;
+      private string _correlationId = "";
+
+      [Parameter] public string Value { get; set; } = "";
+      [Parameter] public EventCallback<string> ValueChanged { get; set; }
+      [Parameter] public EventCallback OnSend { get; set; }
+      [Parameter] public bool Disabled { get; set; }
+      [Parameter] public string? SessionId { get; set; }
+      [Parameter] public EventCallback<string> OnValidationFailed { get; set; }
+
+      private string? ValidationError { get; set; }
+      private int CharacterCount => Value?.Length ?? 0;
+      private bool IsNearLimit => CharacterCount > Options.MaxMessageLength * 0.9;
+      private bool IsOverLimit => CharacterCount > Options.MaxMessageLength;
+
+      private bool IsSendDisabled => Disabled
+                                     || string.IsNullOrWhiteSpace(Value)
+                                     || !string.IsNullOrEmpty(ValidationError)
+                                     || IsOverLimit;
+
+      protected override async Task OnInitializedAsync()
+      {
+          _correlationId = Metrics.GenerateCorrelationId();
+
+          // Setup debounce timer for validation
+          _debounceTimer = new Timer(Options.ValidationDebounceDelay.TotalMilliseconds);
+          _debounceTimer.Elapsed += OnDebounceElapsed;
+          _debounceTimer.AutoReset = false;
+
+          // Setup draft save timer (save after 1 second of inactivity)
+          _draftSaveTimer = new Timer(1000);
+          _draftSaveTimer.Elapsed += OnDraftSaveElapsed;
+          _draftSaveTimer.AutoReset = false;
+
+          // Restore draft if available
+          var draft = await StateService.LoadDraftAsync(SessionId);
+          if (!string.IsNullOrEmpty(draft))
+          {
+              Value = draft;
+              await ValueChanged.InvokeAsync(draft);
+              Metrics.RecordDraftRestored(_correlationId);
+          }
+      }
+
+      private async Task HandleValueChanged(string newValue)
+      {
+          _pendingValue = newValue;
+
+          // Check for dangerous content and sanitize
+          if (ChatInputSanitizer.ContainsDangerousContent(newValue))
+          {
+              newValue = ChatInputSanitizer.Sanitize(newValue);
+              _sanitizationApplied = true;
+              Metrics.RecordInputSanitized(_correlationId);
+          }
+          else
+          {
+              _sanitizationApplied = false;
+          }
+
+          Value = newValue;
+          await ValueChanged.InvokeAsync(newValue);
+
+          // Reset and start debounce timer
+          _debounceTimer?.Stop();
+          _debounceTimer?.Start();
+
+          // Reset and start draft save timer
+          _draftSaveTimer?.Stop();
+          _draftSaveTimer?.Start();
+
+          StateHasChanged();
+      }
+
+      private void OnDebounceElapsed(object? sender, ElapsedEventArgs e)
+      {
+          InvokeAsync(() =>
+          {
+              ValidationError = ValidateInput(Value);
+              StateHasChanged();
+          });
+      }
+
+      private void OnDraftSaveElapsed(object? sender, ElapsedEventArgs e)
+      {
+          InvokeAsync(async () =>
+          {
+              await StateService.SaveDraftAsync(SessionId, Value);
+              Metrics.RecordDraftSaved(_correlationId);
+          });
+      }
+
+      private string? ValidateInput(string? input)
+      {
+          if (string.IsNullOrWhiteSpace(input))
+              return null; // Empty is valid (just can't send)
+
+          if (input.Length > Options.MaxMessageLength)
+          {
+              var reason = "too_long";
+              Metrics.RecordInputValidationFailed(reason, _correlationId);
+              return ChatErrorMessages.Format(ChatErrorMessages.InputTooLong, Options.MaxMessageLength);
+          }
+
+          return null;
+      }
+
+      private async Task HandleKeyDown(KeyboardEventArgs e)
+      {
+          // Ctrl+Enter or Cmd+Enter to send (not Shift+Enter)
+          if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey) && !e.ShiftKey)
+          {
+              await HandleSendClick();
+          }
+      }
+
+      private void HandleKeyUp(KeyboardEventArgs e)
+      {
+          // Clear sanitization notice after user continues typing
+          if (_sanitizationApplied && e.Key != "Enter")
+          {
+              _sanitizationApplied = false;
+              StateHasChanged();
+          }
+      }
+
+      private async Task HandleSendClick()
+      {
+          // Force immediate validation
+          _debounceTimer?.Stop();
+          var error = ValidateInput(Value);
+
+          if (error != null)
+          {
+              ValidationError = error;
+              await OnValidationFailed.InvokeAsync(error);
+              return;
+          }
+
+          if (!string.IsNullOrWhiteSpace(Value) && !Disabled)
+          {
+              ValidationError = null;
+              _sanitizationApplied = false;
+
+              // Clear draft on send
+              await StateService.ClearDraftAsync(SessionId);
+
+              await OnSend.InvokeAsync();
+          }
+      }
+
+      /// <summary>Focus the input field programmatically.</summary>
+      public async Task FocusAsync()
+      {
+          try
+          {
+              await JS.InvokeVoidAsync("eval",
+                  "document.querySelector('.chat-input-wrapper textarea')?.focus()");
+          }
+          catch
+          {
+              // Focus may fail in some scenarios, ignore
+          }
+      }
+
+      /// <summary>Clear the input and draft.</summary>
+      public async Task ClearAsync()
+      {
+          Value = "";
+          ValidationError = null;
+          _sanitizationApplied = false;
+          await ValueChanged.InvokeAsync("");
+          await StateService.ClearDraftAsync(SessionId);
+      }
+
+      public void Dispose()
+      {
+          _debounceTimer?.Stop();
+          _debounceTimer?.Dispose();
+          _draftSaveTimer?.Stop();
+          _draftSaveTimer?.Dispose();
+      }
+
+  }
